@@ -12,3 +12,13 @@ This file records validation commands for the initial repository baseline.
 | `terraform init -backend=false` in `terraform/` | Passed. Installed `hashicorp/aws` provider v5.100.0 and wrote `.terraform.lock.hcl`. |
 | `terraform validate` in `terraform/` | Passed. Terraform reported the configuration is valid. |
 | `git diff --check` | Passed after initializing the local repository and adding files as intent-to-add. |
+
+## UX Optimization Update
+
+| Command | Result |
+| --- | --- |
+| `npm run build` in `lambda/` | Passed after reusing the presign `jobId` for transcription jobs. |
+| `npm test` in `lambda/` | Passed. 4 test files and 13 tests passed. |
+| `npm run bundle` in `lambda/` | Passed. Rebuilt zip artifacts for 8 Lambda handlers. |
+| `npm audit` in `lambda/` | Passed with 0 vulnerabilities. |
+| `git diff --check` | Passed. |

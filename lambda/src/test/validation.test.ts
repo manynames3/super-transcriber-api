@@ -6,6 +6,7 @@ import {
   DEFAULT_MONTHLY_MINUTES,
   decodeCursor,
   encodeCursor,
+  parseOwnedUploadS3Key,
   validateCreateTranscriptionRequest,
   validateUploadRequest,
   type LimitConfig
@@ -85,6 +86,30 @@ describe("request validation", () => {
     ).toBe("customers/c/uploads/j/file.mp3");
 
     expect(() => validateCreateTranscriptionRequest({ fileName: "file.mp3" }, limits)).toThrow(/exactly one/);
+  });
+
+  it("infers fileName from a presigned upload key", () => {
+    const s3Key = "customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3";
+
+    expect(parseOwnedUploadS3Key("cust_123", s3Key)).toEqual({
+      jobId: "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
+      fileName: "meeting.mp3"
+    });
+
+    expect(
+      validateCreateTranscriptionRequest(
+        {
+          s3Key
+        },
+        limits
+      )
+    ).toEqual({
+      s3Key,
+      fileName: "meeting.mp3",
+      sourceUrl: undefined,
+      durationSeconds: undefined,
+      speakerCount: undefined
+    });
   });
 
   it("round-trips pagination cursors", () => {

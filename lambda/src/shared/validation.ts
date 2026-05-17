@@ -33,7 +33,7 @@ export interface UploadRequest {
 export interface CreateTranscriptionRequest {
   s3Key?: string;
   sourceUrl?: string;
-  fileName: string;
+  fileName?: string;
   durationSeconds?: number;
   speakerCount?: number;
 }
@@ -101,7 +101,7 @@ export function validateUploadRequest(input: unknown, limits: LimitConfig): Uplo
 
 export function validateCreateTranscriptionRequest(input: unknown, limits: LimitConfig): CreateTranscriptionRequest {
   const record = asRecord(input);
-  const fileName = sanitizeFileName(requireString(record, "fileName"));
+  const providedFileName = optionalString(record, "fileName");
   const s3Key = optionalString(record, "s3Key");
   const sourceUrl = optionalString(record, "sourceUrl");
   const durationSeconds = optionalPositiveInteger(record, "durationSeconds");
@@ -109,6 +109,11 @@ export function validateCreateTranscriptionRequest(input: unknown, limits: Limit
 
   if ((s3Key && sourceUrl) || (!s3Key && !sourceUrl)) {
     throw badRequest("Provide exactly one of s3Key or sourceUrl", "INVALID_SOURCE");
+  }
+
+  const fileName = providedFileName ? sanitizeFileName(providedFileName) : s3Key ? parseOwnedUploadS3Key("", s3Key, false).fileName : undefined;
+  if (!fileName) {
+    throw badRequest("fileName is required", "INVALID_FILE_NAME");
   }
 
   assertAllowedAudio(fileName);
@@ -141,6 +146,27 @@ export function assertDuration(durationSeconds: number | undefined, maxDurationS
 
 export function reservedDurationSeconds(durationSeconds: number | undefined, maxDurationSeconds: number): number {
   return durationSeconds ?? maxDurationSeconds;
+}
+
+export function parseOwnedUploadS3Key(
+  customerId: string,
+  s3Key: string,
+  enforceCustomerPrefix = true
+): { jobId: string; fileName: string } {
+  const escapedCustomerId = escapeRegex(customerId);
+  const pattern = enforceCustomerPrefix
+    ? new RegExp(`^customers/${escapedCustomerId}/uploads/([0-9a-f-]{36})/([^/]+)$`)
+    : /^customers\/[^/]+\/uploads\/([0-9a-f-]{36})\/([^/]+)$/;
+  const match = pattern.exec(s3Key);
+
+  if (!match || s3Key.includes("..")) {
+    throw badRequest("s3Key must come from POST /v1/uploads/presign for this API key", "INVALID_S3_KEY");
+  }
+
+  return {
+    jobId: match[1],
+    fileName: sanitizeFileName(match[2])
+  };
 }
 
 export function monthKey(date = new Date()): string {
@@ -198,6 +224,10 @@ function readPositiveInteger(name: string, fallback: number): number {
 
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function asRecord(input: unknown): Record<string, unknown> {

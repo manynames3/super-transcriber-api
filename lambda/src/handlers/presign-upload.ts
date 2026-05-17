@@ -46,9 +46,21 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     return jsonResponse(200, {
       uploadUrl,
       uploadMethod: "PUT",
+      uploadHeaders: {
+        "content-type": input.contentType
+      },
       jobId,
       s3Key,
-      expiresInSeconds
+      expiresInSeconds,
+      startRequest: {
+        s3Key,
+        fileName: input.fileName
+      },
+      pollUrl: `/v1/transcriptions/${jobId}`,
+      links: {
+        startTranscription: "/v1/transcriptions",
+        jobStatus: `/v1/transcriptions/${jobId}`
+      }
     });
   } catch (error) {
     return errorResponse(error);

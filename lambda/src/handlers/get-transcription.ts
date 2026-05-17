@@ -26,7 +26,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       wordCount: job.wordCount,
       failureReason: job.failureReason,
       createdAt: job.createdAt,
-      updatedAt: job.updatedAt
+      updatedAt: job.updatedAt,
+      links: {
+        self: `/v1/transcriptions/${job.jobId}`
+      }
     };
 
     if (job.status === "COMPLETED") {

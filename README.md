@@ -2,7 +2,13 @@
 
 Super Transcriber API is a developer-facing, privacy-conscious transcription backend for teams that want a clean REST API on a cost-first AWS serverless stack. It accepts private S3 uploads, starts asynchronous Amazon Transcribe jobs, records status and usage in DynamoDB, and can be deployed as a hosted API or into a customer-owned AWS account with the same Terraform.
 
+## Product Lineage
+
+This API-first version was developed from the original Super Transcriber, an end-user-facing transcription web app. The goal of this repository is to package the core transcription workflow as a ready-to-integrate backend for developers, teams, and organizations that want to embed transcription into an existing product, internal system, or AWS-native tech stack.
+
 ## API Quickstart
+
+The easiest integration path is: presign an upload, PUT the audio file to S3, then start transcription with the returned `s3Key`. The same `jobId` is used for upload tracking, transcription status, polling, and transcript retrieval.
 
 Deploy the stack, then set:
 
@@ -45,7 +51,7 @@ Start transcription with the returned `s3Key`.
 curl -sS -X POST "$API_BASE_URL/v1/transcriptions" \
   -H "x-api-key: $API_KEY" \
   -H "content-type: application/json" \
-  -d '{"s3Key":"customers/cust_123/uploads/job_123/meeting.mp3","fileName":"meeting.mp3","durationSeconds":600,"speakerCount":2}'
+  -d '{"s3Key":"customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3","durationSeconds":600,"speakerCount":2}'
 ```
 
 Poll and list jobs.
@@ -54,6 +60,8 @@ Poll and list jobs.
 curl -sS "$API_BASE_URL/v1/transcriptions/$JOB_ID" -H "x-api-key: $API_KEY"
 curl -sS "$API_BASE_URL/v1/transcriptions?limit=20" -H "x-api-key: $API_KEY"
 ```
+
+The `jobId` returned from the presign step is the same `jobId` used for transcription status, so clients can create one durable id before the audio upload starts.
 
 ## Architecture Summary
 

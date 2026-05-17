@@ -45,8 +45,10 @@ Start transcription:
 curl -sS -X POST "$API_BASE_URL/v1/transcriptions" \
   -H "x-api-key: $API_KEY" \
   -H "content-type: application/json" \
-  -d "{\"s3Key\":\"$S3_KEY\",\"fileName\":\"meeting.mp3\",\"durationSeconds\":600,\"speakerCount\":2}"
+  -d "{\"s3Key\":\"$S3_KEY\",\"durationSeconds\":600,\"speakerCount\":2}"
 ```
+
+The `jobId` returned by the presign step is embedded in the `s3Key` and becomes the transcription job id, so clients can persist one id before upload and use it for polling.
 
 Poll status:
 

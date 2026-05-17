@@ -74,13 +74,27 @@ Response:
 
 ```json
 {
-  "uploadUrl": "https://bucket.s3.amazonaws.com/customers/cust_123/uploads/job_123/meeting.mp3?...",
+  "uploadUrl": "https://bucket.s3.amazonaws.com/customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3?...",
   "uploadMethod": "PUT",
+  "uploadHeaders": {
+    "content-type": "audio/mpeg"
+  },
   "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
   "s3Key": "customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3",
-  "expiresInSeconds": 900
+  "expiresInSeconds": 900,
+  "startRequest": {
+    "s3Key": "customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3",
+    "fileName": "meeting.mp3"
+  },
+  "pollUrl": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
+  "links": {
+    "startTranscription": "/v1/transcriptions",
+    "jobStatus": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821"
+  }
 }
 ```
+
+The returned `jobId` is reserved from the upload path and is reused as the transcription job id after `POST /v1/transcriptions`.
 
 ## POST /v1/transcriptions
 
@@ -91,7 +105,6 @@ Request with S3 key:
 ```json
 {
   "s3Key": "customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3",
-  "fileName": "meeting.mp3",
   "durationSeconds": 600,
   "speakerCount": 2
 }
@@ -101,10 +114,16 @@ Response:
 
 ```json
 {
-  "jobId": "8d1c67c8-89d7-4b2f-9b0e-b15ea5f41c81",
-  "status": "IN_PROGRESS"
+  "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
+  "status": "IN_PROGRESS",
+  "pollUrl": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
+  "links": {
+    "self": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821"
+  }
 }
 ```
+
+`fileName` may be omitted for presigned uploads because the API can infer it from the `s3Key`. If provided, it must match the file name in the key.
 
 Request with `sourceUrl`:
 
@@ -133,14 +152,17 @@ In-progress response:
 
 ```json
 {
-  "jobId": "8d1c67c8-89d7-4b2f-9b0e-b15ea5f41c81",
+  "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
   "status": "IN_PROGRESS",
   "fileName": "meeting.mp3",
   "durationSeconds": 600,
   "wordCount": 0,
   "failureReason": null,
   "createdAt": "2026-05-16T17:30:00.000Z",
-  "updatedAt": "2026-05-16T17:30:00.000Z"
+  "updatedAt": "2026-05-16T17:30:00.000Z",
+  "links": {
+    "self": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821"
+  }
 }
 ```
 
@@ -148,7 +170,7 @@ Completed response:
 
 ```json
 {
-  "jobId": "8d1c67c8-89d7-4b2f-9b0e-b15ea5f41c81",
+  "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
   "status": "COMPLETED",
   "fileName": "meeting.mp3",
   "durationSeconds": 600,
@@ -157,7 +179,10 @@ Completed response:
   "createdAt": "2026-05-16T17:30:00.000Z",
   "updatedAt": "2026-05-16T17:35:22.000Z",
   "transcriptText": "Speaker 1 started the meeting...",
-  "transcriptJsonUrl": "https://bucket.s3.amazonaws.com/customers/cust_123/transcripts/job.json?..."
+  "transcriptJsonUrl": "https://bucket.s3.amazonaws.com/customers/cust_123/transcripts/job.json?...",
+  "links": {
+    "self": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821"
+  }
 }
 ```
 
@@ -177,17 +202,21 @@ Response:
 {
   "items": [
     {
-      "jobId": "8d1c67c8-89d7-4b2f-9b0e-b15ea5f41c81",
+      "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
       "status": "COMPLETED",
       "fileName": "meeting.mp3",
       "durationSeconds": 600,
       "wordCount": 421,
       "failureReason": null,
       "createdAt": "2026-05-16T17:30:00.000Z",
-      "updatedAt": "2026-05-16T17:35:22.000Z"
+      "updatedAt": "2026-05-16T17:35:22.000Z",
+      "links": {
+        "self": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821"
+      }
     }
   ],
-  "nextCursor": null
+  "nextCursor": null,
+  "hasMore": false
 }
 ```
 

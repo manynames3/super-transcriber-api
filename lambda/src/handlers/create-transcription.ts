@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
 import { authenticate } from "../shared/auth.js";
@@ -13,12 +12,13 @@ import {
   type JobRecord,
   type TranscribeMappingRecord
 } from "../shared/dynamodb.js";
-import { badRequest, internalError, notImplemented, upstreamFailure } from "../shared/errors.js";
+import { badRequest, conflict, internalError, notImplemented, upstreamFailure } from "../shared/errors.js";
 import { errorResponse, jsonResponse, logError, logInfo } from "../shared/response.js";
 import { startTranscribeJob } from "../shared/transcribe.js";
 import {
   assertFileSize,
   monthKey,
+  parseOwnedUploadS3Key,
   parseJsonBody,
   reservedDurationSeconds,
   validateCreateTranscriptionRequest
@@ -38,20 +38,26 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
   try {
     const auth = await authenticate(event);
-    const input = validateCreateTranscriptionRequest(parseJsonBody(event.body), auth.limits);
+    const body = parseJsonBody<Record<string, unknown>>(event.body);
+    if (typeof body.sourceUrl === "string" && body.sourceUrl.trim() && !body.s3Key) {
+      throw notImplemented("sourceUrl transcription is not implemented in v1; upload to S3 with a presigned URL first");
+    }
+
+    const input = validateCreateTranscriptionRequest(body, auth.limits);
 
     if (input.sourceUrl) {
       throw notImplemented("sourceUrl transcription is not implemented in v1; upload to S3 with a presigned URL first");
     }
 
-    if (!input.s3Key) {
-      throw badRequest("s3Key is required", "INVALID_SOURCE");
+    const s3Key = input.s3Key ?? "";
+    const upload = parseOwnedUploadS3Key(auth.customerId, s3Key);
+    if (input.fileName && input.fileName !== upload.fileName) {
+      throw badRequest("fileName must match the file name in s3Key", "INVALID_FILE_NAME");
     }
+    const fileName = input.fileName ?? upload.fileName;
+    await assertObjectIsUsable(s3Key, auth.limits.maxFileSizeBytes);
 
-    assertOwnedS3Key(auth.customerId, input.s3Key);
-    await assertObjectIsUsable(input.s3Key, auth.limits.maxFileSizeBytes);
-
-    const jobId = randomUUID();
+    const jobId = upload.jobId;
     const usageMonth = monthKey();
     const reservedSeconds = reservedDurationSeconds(input.durationSeconds, auth.limits.maxDurationSeconds);
     await reserveUsageCapacity(auth.customerId, usageMonth, reservedSeconds, auth.limits);
@@ -69,8 +75,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       jobId,
       customerId: auth.customerId,
       status: "IN_PROGRESS",
-      s3Key: input.s3Key,
-      fileName: input.fileName,
+      s3Key,
+      fileName,
       durationSeconds: input.durationSeconds ?? null,
       reservedDurationSeconds: reservedSeconds,
       wordCount: 0,
@@ -101,8 +107,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
         customerId: auth.customerId,
         jobId,
         transcribeJobName,
-        s3Key: input.s3Key,
-        fileName: input.fileName,
+        s3Key,
+        fileName,
         speakerCount: input.speakerCount,
         transcriptJsonS3Key
       });
@@ -129,20 +135,20 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
     return jsonResponse(202, {
       jobId,
-      status: "IN_PROGRESS"
+      status: "IN_PROGRESS",
+      pollUrl: `/v1/transcriptions/${jobId}`,
+      links: {
+        self: `/v1/transcriptions/${jobId}`
+      }
     });
   } catch (error) {
     if (reservation) {
       await releaseUsageReservation(reservation.customerId, reservation.usageMonth, reservation.reservedSeconds);
     }
+    if (error instanceof Error && error.name === "TransactionCanceledException") {
+      return errorResponse(conflict("Transcription job already exists for this upload", "JOB_ALREADY_EXISTS"));
+    }
     return errorResponse(error);
-  }
-}
-
-function assertOwnedS3Key(customerId: string, s3Key: string): void {
-  const expectedPrefix = `customers/${customerId}/uploads/`;
-  if (!s3Key.startsWith(expectedPrefix) || s3Key.includes("..")) {
-    throw badRequest("s3Key is not owned by this API key", "INVALID_S3_KEY");
   }
 }
 
