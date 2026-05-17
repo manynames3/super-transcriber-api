@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API Reference | Super Transcriber API</title>
+    <meta
+      name="description"
+      content="Endpoint reference for Super Transcriber API uploads, transcription jobs, billing, webhooks, API keys, and health checks."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header" data-elevated="false">
+      <a class="brand" href="./index.html" aria-label="Super Transcriber API home">
+        <span class="brand-mark" aria-hidden="true">ST</span>
+        <span>Super Transcriber API</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="./index.html#workflow">Workflow</a>
+        <a href="./index.html#platform">Platform</a>
+        <a href="./index.html#pricing">Plans</a>
+        <a href="./api-reference.html">Docs</a>
+      </nav>
+      <a class="header-cta" href="https://pn72sppog0.execute-api.us-east-1.amazonaws.com/health">Check API</a>
+    </header>
+
+    <main>
+      <section class="docs-hero" aria-labelledby="docs-title">
+        <div class="section-inner">
+          <p class="section-kicker">REST API reference</p>
+          <h1 id="docs-title">Build transcription into your product with a small async API.</h1>
+          <p>
+            Authenticated routes accept `x-api-key: &lt;key&gt;` or
+            `Authorization: Bearer &lt;key&gt;`. Errors use
+            `{ "success": false, "error": "...", "code": "..." }`.
+          </p>
+        </div>
+      </section>
+
+      <section class="docs-layout section-pad" aria-label="API endpoint reference">
+        <aside class="docs-nav" aria-label="Endpoint navigation">
+          <a href="#health">Health</a>
+          <a href="#api-keys">API keys</a>
+          <a href="#uploads">Uploads</a>
+          <a href="#transcriptions">Transcriptions</a>
+          <a href="#webhooks">Webhooks</a>
+          <a href="#billing">Billing</a>
+        </aside>
+
+        <div class="docs-content">
+          <article class="endpoint" id="health">
+            <div class="method-line"><span class="method get">GET</span><code>/health</code></div>
+            <p>Public uptime check with service name, version, and request id.</p>
+            <pre class="inline-code"><code>{
+  "ok": true,
+  "service": "super-transcriber-api",
+  "version": "dev-local",
+  "requestId": "req-123"
+}</code></pre>
+          </article>
+
+          <article class="endpoint" id="api-keys">
+            <div class="method-line"><span class="method post">POST</span><code>/v1/api-keys</code></div>
+            <p>Admin-only API-key creation route. Plaintext keys are returned once and stored only as SHA-256 hashes.</p>
+            <pre class="inline-code"><code>{
+  "customerName": "Acme Dev",
+  "keyName": "Production key",
+  "limits": {
+    "maxActiveJobs": 5,
+    "maxFileSizeBytes": 209715200,
+    "maxDurationSeconds": 1200,
+    "monthlyTranscriptionMinutes": 120
+  }
+}</code></pre>
+          </article>
+
+          <article class="endpoint" id="uploads">
+            <div class="method-line"><span class="method post">POST</span><code>/v1/uploads/presign</code></div>
+            <p>Creates a private presigned S3 upload URL for MP3 or M4A files up to 200 MB.</p>
+            <pre class="inline-code"><code>{
+  "fileName": "meeting.mp3",
+  "contentType": "audio/mpeg",
+  "fileSizeBytes": 1048576
+}</code></pre>
+            <pre class="inline-code"><code>{
+  "uploadUrl": "https://...",
+  "uploadMethod": "PUT",
+  "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
+  "s3Key": "customers/cust_123/uploads/2d1d7a53/meeting.mp3",
+  "expiresInSeconds": 900
+}</code></pre>
+          </article>
+
+          <article class="endpoint" id="transcriptions">
+            <div class="method-line"><span class="method post">POST</span><code>/v1/transcriptions</code></div>
+            <p>Queues an asynchronous transcription job from an owned S3 key. `sourceUrl` returns `501 NOT_IMPLEMENTED` in v1.</p>
+            <pre class="inline-code"><code>{
+  "s3Key": "customers/cust_123/uploads/job_123/meeting.mp3",
+  "fileName": "meeting.mp3",
+  "durationSeconds": 600,
+  "speakerCount": 2
+}</code></pre>
+
+            <div class="method-line"><span class="method get">GET</span><code>/v1/transcriptions/{jobId}</code></div>
+            <p>Returns job state. Complete jobs include transcript text and optional private transcript JSON URLs.</p>
+            <pre class="inline-code"><code>{
+  "jobId": "job_123",
+  "status": "COMPLETED",
+  "fileName": "meeting.mp3",
+  "transcriptText": "Welcome everyone..."
+}</code></pre>
+
+            <div class="method-line"><span class="method get">GET</span><code>/v1/transcriptions?limit=20&amp;cursor=...</code></div>
+            <p>Lists recent jobs for the authenticated customer with cursor pagination.</p>
+
+            <div class="method-line"><span class="method delete">DELETE</span><code>/v1/transcriptions/{jobId}</code></div>
+            <p>Soft deletes a job so it no longer appears in normal customer views.</p>
+          </article>
+
+          <article class="endpoint" id="webhooks">
+            <div class="method-line"><span class="method post">POST</span><code>/v1/webhooks</code></div>
+            <p>Configures signed completion and failure callbacks for an API-key customer.</p>
+            <pre class="inline-code"><code>{
+  "url": "https://example.com/webhooks/super-transcriber",
+  "events": ["transcription.completed", "transcription.failed"]
+}</code></pre>
+          </article>
+
+          <article class="endpoint" id="billing">
+            <div class="method-line"><span class="method post">POST</span><code>/v1/billing/checkout</code></div>
+            <p>Creates an optional Stripe Checkout session for a configured paid plan.</p>
+            <pre class="inline-code"><code>{
+  "email": "dev@example.com",
+  "planId": "starter"
+}</code></pre>
+
+            <div class="method-line"><span class="method post">POST</span><code>/v1/billing/claim</code></div>
+            <p>Verifies a paid Checkout session and returns the plaintext API key once.</p>
+
+            <div class="method-line"><span class="method get">GET</span><code>/v1/billing/account</code></div>
+            <p>Returns the authenticated customer's billing status and enforced limits.</p>
+
+            <div class="method-line"><span class="method post">POST</span><code>/v1/billing/portal</code></div>
+            <p>Creates a Stripe Billing Portal session for subscription management.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Super Transcriber API</span>
+      <span>Docs for hosted and private AWS transcription deployments.</span>
+    </footer>
+  </body>
+</html>
