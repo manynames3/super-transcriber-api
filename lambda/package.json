@@ -1,0 +1,26 @@
+{
+  "name": "super-transcriber-api-lambda",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "bundle": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.637.0",
+    "@aws-sdk/client-s3": "^3.637.0",
+    "@aws-sdk/client-transcribe": "^3.637.0",
+    "@aws-sdk/lib-dynamodb": "^3.637.0",
+    "@aws-sdk/s3-request-presigner": "^3.637.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.16.5",
+    "archiver": "^7.0.1",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.6"
+  }
+}

@@ -1,0 +1,21 @@
+project_name = "super-transcriber-api"
+environment  = "dev"
+aws_region   = "us-east-1"
+
+admin_token   = "replace-with-a-long-random-token"
+build_version = "dev-local"
+
+cors_allowed_origins = ["https://example.com"]
+
+max_active_jobs              = 5
+max_file_size_bytes          = 209715200
+max_duration_seconds         = 1200
+monthly_transcription_minutes = 120
+
+upload_retention_days     = 7
+transcript_retention_days = 30
+
+enable_cloudwatch_alarms      = false
+enable_point_in_time_recovery = false
+
+stripe_secret_arn = ""
