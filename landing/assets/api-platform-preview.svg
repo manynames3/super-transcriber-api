@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Super Transcriber API platform preview</title>
+  <desc id="desc">A product-style preview showing API requests, transcription job state, S3 upload storage, and webhook delivery.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ecfeff"/>
+      <stop offset="0.45" stop-color="#f7faf8"/>
+      <stop offset="1" stop-color="#fff7ed"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" x2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#123b3f"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#0f172a" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <path d="M0 760 C260 690 430 810 705 742 C930 687 1120 580 1600 658 L1600 1000 L0 1000 Z" fill="#0f8b8d" opacity="0.12"/>
+  <path d="M0 115 C240 188 430 56 680 130 C930 205 1135 275 1600 140 L1600 0 L0 0 Z" fill="#f97316" opacity="0.10"/>
+
+  <g filter="url(#shadow)">
+    <rect x="136" y="96" width="980" height="628" rx="18" fill="#ffffff"/>
+    <rect x="136" y="96" width="980" height="58" rx="18" fill="#111827"/>
+    <rect x="136" y="136" width="980" height="18" fill="#111827"/>
+    <circle cx="176" cy="126" r="8" fill="#ef4444"/>
+    <circle cx="205" cy="126" r="8" fill="#f59e0b"/>
+    <circle cx="234" cy="126" r="8" fill="#10b981"/>
+    <text x="276" y="132" fill="#e5e7eb" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700">super-transcriber-api</text>
+
+    <rect x="176" y="192" width="900" height="152" rx="12" fill="url(#panel)"/>
+    <text x="208" y="232" fill="#94f4e6" font-family="SFMono-Regular, Consolas, monospace" font-size="22">POST /v1/uploads/presign</text>
+    <text x="208" y="274" fill="#f8fafc" font-family="SFMono-Regular, Consolas, monospace" font-size="24">{ "fileName": "meeting.mp3", "fileSizeBytes": 1048576 }</text>
+    <text x="208" y="315" fill="#d1fae5" font-family="SFMono-Regular, Consolas, monospace" font-size="22">200 OK  uploadUrl, jobId, s3Key</text>
+    <rect x="918" y="218" width="118" height="42" rx="21" fill="#f97316"/>
+    <text x="948" y="246" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="700">async</text>
+
+    <rect x="176" y="384" width="268" height="232" rx="12" fill="#f8fafc" stroke="#d7dde5"/>
+    <text x="208" y="428" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">Private Upload</text>
+    <text x="208" y="464" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="19">S3 presigned PUT</text>
+    <rect x="208" y="510" width="204" height="18" rx="9" fill="#0f8b8d"/>
+    <rect x="208" y="544" width="152" height="18" rx="9" fill="#99f6e4"/>
+    <rect x="208" y="578" width="180" height="18" rx="9" fill="#fed7aa"/>
+
+    <rect x="490" y="384" width="268" height="232" rx="12" fill="#f8fafc" stroke="#d7dde5"/>
+    <text x="522" y="428" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">Job Queue</text>
+    <text x="522" y="464" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="19">DynamoDB + SQS</text>
+    <rect x="522" y="504" width="190" height="34" rx="17" fill="#111827"/>
+    <text x="548" y="527" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">QUEUED</text>
+    <rect x="522" y="554" width="190" height="34" rx="17" fill="#0f8b8d"/>
+    <text x="548" y="577" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700">IN_PROGRESS</text>
+
+    <rect x="804" y="384" width="272" height="232" rx="12" fill="#f8fafc" stroke="#d7dde5"/>
+    <text x="836" y="428" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">Transcript</text>
+    <text x="836" y="464" fill="#475569" font-family="Inter, Arial, sans-serif" font-size="19">Poll or webhook</text>
+    <path d="M840 550 C868 492 890 612 918 552 C946 492 970 612 998 550 C1020 504 1034 562 1056 536" fill="none" stroke="#f97316" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="968" y="236" width="448" height="538" rx="18" fill="#ffffff"/>
+    <rect x="1008" y="280" width="368" height="56" rx="8" fill="#ecfeff"/>
+    <text x="1030" y="316" fill="#0f766e" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800">Developer dashboard</text>
+
+    <rect x="1008" y="372" width="168" height="112" rx="8" fill="#111827"/>
+    <text x="1030" y="414" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="700">Active jobs</text>
+    <text x="1030" y="458" fill="#94f4e6" font-family="Inter, Arial, sans-serif" font-size="40" font-weight="900">5</text>
+
+    <rect x="1208" y="372" width="168" height="112" rx="8" fill="#fff7ed"/>
+    <text x="1230" y="414" fill="#9a3412" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="700">Minutes</text>
+    <text x="1230" y="458" fill="#ea580c" font-family="Inter, Arial, sans-serif" font-size="40" font-weight="900">120</text>
+
+    <rect x="1008" y="526" width="368" height="1" fill="#d7dde5"/>
+    <text x="1008" y="574" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800">Recent job</text>
+    <text x="1008" y="616" fill="#475569" font-family="SFMono-Regular, Consolas, monospace" font-size="19">job_97b15fe3</text>
+    <rect x="1228" y="590" width="148" height="34" rx="17" fill="#dcfce7"/>
+    <text x="1250" y="613" fill="#166534" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="800">COMPLETED</text>
+
+    <text x="1008" y="684" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="800">Webhook</text>
+    <text x="1008" y="726" fill="#475569" font-family="SFMono-Regular, Consolas, monospace" font-size="19">transcription.completed</text>
+  </g>
+</svg>

@@ -6,6 +6,10 @@ Super Transcriber API is a developer-facing, privacy-conscious transcription bac
 
 This API-first version was developed from the original Super Transcriber, an end-user-facing transcription web app. The goal of this repository is to package the core transcription workflow as a ready-to-integrate backend for developers, teams, and organizations that want to embed transcription into an existing product, internal system, or AWS-native tech stack.
 
+## Sales Landing Page
+
+A static developer-facing sales page is included at `landing/index.html`. It can be opened directly or served from any static host, and it adds no AWS idle cost to the API deployment.
+
 ## API Quickstart
 
 The easiest integration path is: presign an upload, PUT the audio file to S3, then queue transcription with the returned `s3Key`. The same `jobId` is used for upload tracking, transcription status, polling, transcript retrieval, optional AI enrichment, and webhook delivery.

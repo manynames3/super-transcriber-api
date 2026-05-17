@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Super Transcriber API | Transcription API for developer teams</title>
+    <meta
+      name="description"
+      content="Super Transcriber API is a privacy-conscious transcription API for teams that need async audio jobs, private AWS deployment, usage controls, and developer-ready integration."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header" data-elevated="false">
+      <a class="brand" href="#top" aria-label="Super Transcriber API home">
+        <span class="brand-mark" aria-hidden="true">ST</span>
+        <span>Super Transcriber API</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#workflow">Workflow</a>
+        <a href="#platform">Platform</a>
+        <a href="#pricing">Plans</a>
+        <a href="../docs/api-reference.md">Docs</a>
+      </nav>
+      <a class="header-cta" href="https://pn72sppog0.execute-api.us-east-1.amazonaws.com/health">Check API</a>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <img
+          class="hero-visual"
+          src="./assets/api-platform-preview.svg"
+          alt="Super Transcriber API platform preview showing presigned uploads, queued jobs, and webhook delivery"
+        />
+        <div class="hero-overlay" aria-hidden="true"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Built from the original Super Transcriber workflow</p>
+          <h1 id="hero-title">Super Transcriber API</h1>
+          <p class="hero-copy">
+            A privacy-conscious transcription API for teams that need async audio jobs,
+            private AWS deployment, usage controls, and a clean REST interface their
+            product can call today.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button primary" href="../docs/api-reference.md">View API docs</a>
+            <a class="button secondary" href="#code">See integration</a>
+          </div>
+          <dl class="hero-stats" aria-label="Platform highlights">
+            <div>
+              <dt>Async</dt>
+              <dd>REST jobs</dd>
+            </div>
+            <div>
+              <dt>Private</dt>
+              <dd>S3 uploads</dd>
+            </div>
+            <div>
+              <dt>Optional</dt>
+              <dd>Customer AWS</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="lineage section-pad" aria-labelledby="lineage-title">
+        <div class="section-inner two-column">
+          <div>
+            <p class="section-kicker">From app to platform</p>
+            <h2 id="lineage-title">The original transcription experience, repackaged for your product.</h2>
+          </div>
+          <p>
+            Super Transcriber started as an end-user-facing web app for uploading audio and
+            receiving transcripts. This API-first edition turns that workflow into a
+            ready-to-integrate backend for developers, internal platforms, and companies
+            that want transcription inside their own existing systems without building the
+            AWS pipeline from scratch.
+          </p>
+        </div>
+      </section>
+
+      <section class="section-pad muted-band" id="workflow" aria-labelledby="workflow-title">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="section-kicker">API workflow</p>
+            <h2 id="workflow-title">Four calls from audio file to transcript.</h2>
+            <p>
+              The hosted API keeps integration simple, while the enterprise path deploys
+              the same Terraform stack into a customer-owned AWS account.
+            </p>
+          </div>
+          <div class="steps" aria-label="Transcription workflow">
+            <article class="step">
+              <span class="step-number">01</span>
+              <h3>Presign upload</h3>
+              <p>Request a private S3 upload URL for an MP3 or M4A file up to 200 MB.</p>
+              <code>POST /v1/uploads/presign</code>
+            </article>
+            <article class="step">
+              <span class="step-number">02</span>
+              <h3>Start job</h3>
+              <p>Submit the returned S3 key and optional speaker or duration metadata.</p>
+              <code>POST /v1/transcriptions</code>
+            </article>
+            <article class="step">
+              <span class="step-number">03</span>
+              <h3>Track status</h3>
+              <p>Poll by job id, list recent jobs with cursor pagination, or receive a webhook.</p>
+              <code>GET /v1/transcriptions/{jobId}</code>
+            </article>
+            <article class="step">
+              <span class="step-number">04</span>
+              <h3>Retrieve transcript</h3>
+              <p>Read complete transcript text and optional raw JSON without exposing another user's data.</p>
+              <code>COMPLETED</code>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-pad" id="code" aria-labelledby="code-title">
+        <div class="section-inner code-layout">
+          <div class="code-copy">
+            <p class="section-kicker">Developer experience</p>
+            <h2 id="code-title">A straightforward integration surface for product teams.</h2>
+            <p>
+              Every endpoint uses structured JSON, API-key authentication, durable async
+              jobs, and clear error bodies. Customers can start on the hosted API and move
+              to private AWS deployment when procurement or data controls require it.
+            </p>
+            <ul class="feature-list">
+              <li>API keys are hashed before storage and scoped to customer-owned jobs.</li>
+              <li>Usage limits are enforced before Transcribe work starts.</li>
+              <li>Stripe Checkout and webhooks are available without being required.</li>
+            </ul>
+          </div>
+
+          <div class="code-panel" aria-label="Integration examples">
+            <div class="tabs" role="tablist" aria-label="Code examples">
+              <button class="tab-button" id="tab-curl" type="button" role="tab" aria-selected="true" aria-controls="panel-curl" data-tab="curl">
+                cURL
+              </button>
+              <button class="tab-button" id="tab-ts" type="button" role="tab" aria-selected="false" aria-controls="panel-ts" data-tab="ts">
+                TypeScript
+              </button>
+              <button class="tab-button" id="tab-webhook" type="button" role="tab" aria-selected="false" aria-controls="panel-webhook" data-tab="webhook">
+                Webhook
+              </button>
+            </div>
+            <pre class="code-block active" id="panel-curl" role="tabpanel" aria-labelledby="tab-curl"><code>curl -sS -X POST "$API_BASE_URL/v1/transcriptions" \
+  -H "x-api-key: $SUPER_TRANSCRIBER_API_KEY" \
+  -H "content-type: application/json" \
+  -d '{
+    "s3Key": "customers/cust_123/uploads/job_123/meeting.mp3",
+    "fileName": "meeting.mp3",
+    "durationSeconds": 600,
+    "speakerCount": 2
+  }'</code></pre>
+            <pre class="code-block" id="panel-ts" role="tabpanel" aria-labelledby="tab-ts" hidden><code>import { SuperTranscriberClient } from "@super-transcriber/api-client";
+
+const client = new SuperTranscriberClient({
+  baseUrl: process.env.SUPER_TRANSCRIBER_API_URL!,
+  apiKey: process.env.SUPER_TRANSCRIBER_API_KEY!
+});
+
+const job = await client.createTranscription({
+  s3Key: presign.s3Key,
+  fileName: "meeting.mp3",
+  durationSeconds: 600,
+  speakerCount: 2
+});</code></pre>
+            <pre class="code-block" id="panel-webhook" role="tabpanel" aria-labelledby="tab-webhook" hidden><code>{
+  "event": "transcription.completed",
+  "jobId": "job_97b15fe3",
+  "status": "COMPLETED",
+  "customerId": "cust_123",
+  "transcriptText": "Welcome everyone..."
+}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-pad muted-band" id="platform" aria-labelledby="platform-title">
+        <div class="section-inner">
+          <div class="section-heading compact">
+            <p class="section-kicker">AWS-native platform</p>
+            <h2 id="platform-title">Built for low idle cost and enterprise deployment options.</h2>
+          </div>
+          <div class="platform-grid">
+            <article class="platform-item">
+              <h3>Serverless core</h3>
+              <p>API Gateway HTTP API, Lambda Node.js 20 on arm64, SQS workers, EventBridge completion events, and DynamoDB on-demand storage.</p>
+            </article>
+            <article class="platform-item">
+              <h3>Private media path</h3>
+              <p>Audio enters through presigned S3 uploads. Buckets block public access and lifecycle rules expire files and generated transcripts.</p>
+            </article>
+            <article class="platform-item">
+              <h3>Usage-aware billing</h3>
+              <p>Per-customer active job and monthly minute limits are enforced before transcription starts. Stripe is optional and disabled until configured.</p>
+            </article>
+            <article class="platform-item">
+              <h3>Security controls</h3>
+              <p>Hashed API keys, scoped job ownership checks, per-Lambda IAM roles, HMAC webhooks, structured errors, and no raw API-key logging.</p>
+            </article>
+            <article class="platform-item">
+              <h3>Enterprise path</h3>
+              <p>The same Terraform stack can be deployed into a customer AWS account for teams that need direct infrastructure ownership.</p>
+            </article>
+            <article class="platform-item">
+              <h3>Cost-first shape</h3>
+              <p>No VPC, NAT Gateway, RDS, OpenSearch, or fixed monthly compute. Idle cost stays tied to minimal secrets and storage.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-pad" id="pricing" aria-labelledby="pricing-title">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="section-kicker">Packaging</p>
+            <h2 id="pricing-title">Monetization-ready without forcing a fixed platform bill.</h2>
+            <p>
+              Plans are represented as API usage limits and can be wired to Stripe Checkout,
+              private contracts, or customer-owned deployments.
+            </p>
+          </div>
+          <div class="plans">
+            <article class="plan">
+              <h3>Starter API</h3>
+              <p class="plan-for">For prototypes, internal tools, and first integrations.</p>
+              <ul>
+                <li>120 monthly transcription minutes</li>
+                <li>5 active jobs</li>
+                <li>200 MB file limit</li>
+                <li>API-key access and polling</li>
+              </ul>
+            </article>
+            <article class="plan featured">
+              <h3>Team API</h3>
+              <p class="plan-for">For products adding transcription to customer workflows.</p>
+              <ul>
+                <li>Higher monthly minute pools</li>
+                <li>Webhook delivery</li>
+                <li>Optional AI transcript enrichment</li>
+                <li>Stripe-ready billing hooks</li>
+              </ul>
+            </article>
+            <article class="plan">
+              <h3>Private AWS</h3>
+              <p class="plan-for">For companies that want the same system in their account.</p>
+              <ul>
+                <li>Terraform deployment package</li>
+                <li>Customer-owned S3 and DynamoDB</li>
+                <li>Enterprise security review path</li>
+                <li>No shared media storage</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-band" aria-labelledby="cta-title">
+        <div class="section-inner cta-content">
+          <div>
+            <p class="section-kicker">Ready-to-integrate backend</p>
+            <h2 id="cta-title">Give your product transcription without asking your team to build the AWS pipeline.</h2>
+          </div>
+          <div class="cta-actions">
+            <a class="button primary" href="../docs/api-reference.md">Read the API reference</a>
+            <a class="button secondary on-dark" href="https://pn72sppog0.execute-api.us-east-1.amazonaws.com">Open live status</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Super Transcriber API</span>
+      <span>Developer-facing transcription infrastructure for hosted and private AWS deployments.</span>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
