@@ -10,7 +10,7 @@ Super Transcriber API is a developer-facing transcription backend that turns the
 - OpenAPI contract: [openapi/openapi.yaml](openapi/openapi.yaml)
 - Architecture docs: [docs/architecture.md](docs/architecture.md)
 
-![Super Transcriber API platform preview](landing/assets/api-platform-preview.svg)
+![Super Transcriber API platform preview](landing/assets/api-console-preview-dark.svg)
 
 ## About
 
@@ -215,3 +215,5 @@ The active CI workflow installs Lambda and SDK dependencies, runs TypeScript che
 - Direct `sourceUrl` ingestion is not implemented in v1; it returns `501 NOT_IMPLEMENTED`.
 - Stripe billing and Bedrock enrichment are disabled unless the required Terraform variables and AWS/Stripe configuration are provided.
 - API Gateway HTTP API does not support REST API usage plans, so this project uses Lambda-side per-customer usage counters and stage throttling.
+
+©2026 SUPREME AI VENTURES LLC

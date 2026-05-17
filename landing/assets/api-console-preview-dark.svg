@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="860" viewBox="0 0 1320 860" role="img" aria-labelledby="title desc">
+  <title id="title">Super Transcriber API dark console preview</title>
+  <desc id="desc">A dark product preview showing an API transcription request, private upload state, queued job status, and transcript output.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1c26"/>
+      <stop offset="1" stop-color="#101016"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0c95c"/>
+      <stop offset="1" stop-color="#b98224"/>
+    </linearGradient>
+    <filter id="shadow" x="-12%" y="-12%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="26" stdDeviation="24" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#ffffff" stroke-opacity="0.035"/>
+    </pattern>
+  </defs>
+
+  <rect width="1320" height="860" fill="transparent"/>
+  <g filter="url(#shadow)">
+    <rect x="72" y="78" width="1176" height="704" rx="26" fill="url(#panel)" stroke="#ffffff" stroke-opacity="0.10"/>
+    <rect x="72" y="78" width="1176" height="704" rx="26" fill="url(#grid)"/>
+
+    <rect x="118" y="126" width="1084" height="76" rx="16" fill="#0a0a0f" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.08"/>
+    <circle cx="156" cy="164" r="7" fill="#ef4444"/>
+    <circle cx="184" cy="164" r="7" fill="#f59e0b"/>
+    <circle cx="212" cy="164" r="7" fill="#34d399"/>
+    <text x="252" y="172" fill="#f0ede8" font-family="Geist, Arial, sans-serif" font-size="22" font-weight="600">super-transcriber-api</text>
+    <rect x="1014" y="143" width="148" height="42" rx="21" fill="#3ecf8e" fill-opacity="0.12"/>
+    <circle cx="1040" cy="164" r="6" fill="#3ecf8e"/>
+    <text x="1056" y="171" fill="#7ee7ba" font-family="Geist, Arial, sans-serif" font-size="18" font-weight="500">Healthy</text>
+
+    <rect x="118" y="242" width="616" height="232" rx="20" fill="#13131a" fill-opacity="0.94" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="152" y="286" fill="#d4a843" font-family="Geist Mono, Consolas, monospace" font-size="18">POST /v1/transcriptions</text>
+    <text x="152" y="332" fill="#f0ede8" font-family="Geist Mono, Consolas, monospace" font-size="22">{</text>
+    <text x="188" y="368" fill="#9a8bff" font-family="Geist Mono, Consolas, monospace" font-size="22">"s3Key"</text>
+    <text x="308" y="368" fill="#f0ede8" font-family="Geist Mono, Consolas, monospace" font-size="22">: "customers/cust_123/uploads/meeting.mp3",</text>
+    <text x="188" y="404" fill="#9a8bff" font-family="Geist Mono, Consolas, monospace" font-size="22">"speakerCount"</text>
+    <text x="380" y="404" fill="#f0ede8" font-family="Geist Mono, Consolas, monospace" font-size="22">: 2</text>
+    <text x="152" y="440" fill="#f0ede8" font-family="Geist Mono, Consolas, monospace" font-size="22">}</text>
+
+    <rect x="118" y="506" width="616" height="164" rx="20" fill="#1c1c26" fill-opacity="0.90" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="152" y="552" fill="#f0ede8" font-family="Geist, Arial, sans-serif" font-size="24" font-weight="600">Private upload path</text>
+    <text x="152" y="594" fill="#a6a29d" font-family="Geist, Arial, sans-serif" font-size="20">Presigned S3 upload, DynamoDB job record, SQS start worker.</text>
+    <rect x="152" y="626" width="154" height="18" rx="9" fill="url(#gold)"/>
+    <rect x="326" y="626" width="228" height="18" rx="9" fill="#ffffff" fill-opacity="0.12"/>
+    <rect x="574" y="626" width="92" height="18" rx="9" fill="#3ecf8e" fill-opacity="0.42"/>
+
+    <rect x="772" y="242" width="386" height="428" rx="20" fill="#13131a" fill-opacity="0.94" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="806" y="290" fill="#f0ede8" font-family="Geist, Arial, sans-serif" font-size="24" font-weight="600">job_97b15fe3</text>
+    <rect x="1000" y="263" width="112" height="34" rx="17" fill="#d4a843" fill-opacity="0.14"/>
+    <text x="1022" y="286" fill="#d4a843" font-family="Geist, Arial, sans-serif" font-size="15" font-weight="600">QUEUED</text>
+
+    <g transform="translate(806 332)">
+      <rect x="0" y="52" width="13" height="48" rx="6.5" fill="url(#gold)"/>
+      <rect x="24" y="28" width="13" height="72" rx="6.5" fill="url(#gold)"/>
+      <rect x="48" y="12" width="13" height="88" rx="6.5" fill="url(#gold)"/>
+      <rect x="72" y="34" width="13" height="66" rx="6.5" fill="url(#gold)"/>
+      <rect x="96" y="4" width="13" height="96" rx="6.5" fill="url(#gold)"/>
+      <rect x="120" y="22" width="13" height="78" rx="6.5" fill="url(#gold)"/>
+      <rect x="144" y="44" width="13" height="56" rx="6.5" fill="url(#gold)"/>
+      <rect x="168" y="18" width="13" height="82" rx="6.5" fill="url(#gold)"/>
+      <rect x="192" y="36" width="13" height="64" rx="6.5" fill="url(#gold)"/>
+      <rect x="216" y="8" width="13" height="92" rx="6.5" fill="url(#gold)"/>
+      <rect x="240" y="48" width="13" height="52" rx="6.5" fill="url(#gold)"/>
+      <rect x="264" y="24" width="13" height="76" rx="6.5" fill="url(#gold)"/>
+    </g>
+
+    <rect x="806" y="488" width="318" height="124" rx="16" fill="#0a0a0f" fill-opacity="0.42" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="834" y="532" fill="#d4a843" font-family="Geist Mono, Consolas, monospace" font-size="17">[Speaker 1]:</text>
+    <text x="834" y="566" fill="#b9b2aa" font-family="Geist Mono, Consolas, monospace" font-size="17">The API returns transcript text,</text>
+    <text x="834" y="594" fill="#b9b2aa" font-family="Geist Mono, Consolas, monospace" font-size="17">JSON output, and webhook status.</text>
+  </g>
+</svg>
