@@ -31,6 +31,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       recordType: "CUSTOMER",
       customerId,
       name: customerName,
+      planId: "manual",
+      billingStatus: "MANUAL",
       createdAt: now,
       updatedAt: now
     };

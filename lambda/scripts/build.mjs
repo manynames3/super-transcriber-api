@@ -11,6 +11,11 @@ const zipDir = join(distDir, "zips");
 const handlers = [
   "health",
   "create-api-key",
+  "create-checkout-session",
+  "stripe-webhook",
+  "claim-checkout-session",
+  "get-billing-account",
+  "create-billing-portal",
   "configure-webhook",
   "presign-upload",
   "create-transcription",

@@ -55,4 +55,9 @@ resource "aws_dynamodb_table" "main" {
   server_side_encryption {
     enabled = true
   }
+
+  ttl {
+    attribute_name = "ttlEpochSeconds"
+    enabled        = true
+  }
 }

@@ -20,6 +20,72 @@ curl -sS -X POST "$API_BASE_URL/v1/api-keys" \
 
 Store the returned plaintext key outside Terraform. The database stores only the SHA-256 hash.
 
+## Enable Monetized Self-Serve Checkout
+
+Create two AWS Secrets Manager secrets outside Terraform or with your preferred secret process:
+
+```bash
+aws secretsmanager create-secret \
+  --name super-transcriber-api/dev/stripe-secret-key \
+  --secret-string '{"secretKey":"sk_test_..."}'
+
+aws secretsmanager create-secret \
+  --name super-transcriber-api/dev/stripe-webhook-secret \
+  --secret-string '{"webhookSecret":"whsec_..."}'
+```
+
+Set Terraform variables:
+
+```hcl
+stripe_secret_arn         = "arn:aws:secretsmanager:us-east-1:123456789012:secret:super-transcriber-api/dev/stripe-secret-key"
+stripe_webhook_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:super-transcriber-api/dev/stripe-webhook-secret"
+
+stripe_price_ids = {
+  starter = "price_..."
+  team    = "price_..."
+}
+```
+
+Configure the Stripe webhook endpoint with the API Gateway URL:
+
+```text
+https://{api-id}.execute-api.{region}.amazonaws.com/v1/billing/webhook
+```
+
+Required Stripe events:
+
+```text
+checkout.session.completed
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+```
+
+Create checkout:
+
+```bash
+curl -sS -X POST "$API_BASE_URL/v1/billing/checkout" \
+  -H "content-type: application/json" \
+  -d '{"email":"dev@example.com","planId":"starter"}'
+```
+
+`successUrl` and `cancelUrl` may be omitted while you do not have a stable domain; the API Gateway URL is used as the fallback Stripe redirect target. Claim the API key after successful checkout with the `checkoutSessionId` and `claimToken` from the checkout response or success redirect:
+
+```bash
+curl -sS -X POST "$API_BASE_URL/v1/billing/claim" \
+  -H "content-type: application/json" \
+  -d '{"checkoutSessionId":"cs_test_...","claimToken":"claim_token_from_redirect"}'
+```
+
+Create a billing portal session:
+
+```bash
+curl -sS -X POST "$API_BASE_URL/v1/billing/portal" \
+  -H "x-api-key: $API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"returnUrl":"https://example.com/account"}'
+```
+
 ## Submit a Job
 
 Presign the upload:
@@ -177,6 +243,7 @@ terraform -chdir=terraform output -raw enrichment_dlq_url
 - Keep `max_active_jobs`, `max_duration_seconds`, and `monthly_transcription_minutes` conservative for dev accounts.
 - Keep lifecycle retention short for uploads and transcripts.
 - Leave `enable_cloudwatch_alarms=false` unless alarm costs are acceptable.
+- Keep monetization secrets limited to the Stripe secret key, Stripe webhook secret, and optional admin token secret. Those are the main predictable idle costs in the paid-product path and should stay comfortably below $3/month before traffic.
 - Use API Gateway stage throttling for coarse request control.
 - Keep optional Bedrock enrichment disabled unless the deployment needs LLM outputs.
 - HTTP API does not use REST API usage plans in this stack. Per-key limits are enforced by Lambda and DynamoDB usage counters.

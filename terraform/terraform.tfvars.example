@@ -28,4 +28,10 @@ bedrock_model_id        = "anthropic.claude-3-haiku-20240307-v1:0"
 ai_enrichment_max_chars = 12000
 ai_enrichment_max_tokens = 1200
 
-stripe_secret_arn = ""
+stripe_secret_arn         = ""
+stripe_webhook_secret_arn = ""
+
+stripe_price_ids = {
+  starter = "price_replace_with_starter_monthly"
+  team    = "price_replace_with_team_monthly"
+}

@@ -32,11 +32,37 @@ export interface ApiKeyRecord {
 export interface CustomerRecord {
   PK: string;
   SK: "METADATA";
+  GSI1PK?: string;
+  GSI1SK?: string;
   recordType: "CUSTOMER";
   customerId: string;
   name: string;
+  email?: string;
+  planId?: string;
+  billingStatus?: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED" | "UNPAID" | "MANUAL";
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BillingSessionRecord {
+  PK: string;
+  SK: "METADATA";
+  recordType: "BILLING_SESSION";
+  claimToken: string;
+  checkoutSessionId: string | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  customerId: string;
+  email: string;
+  planId: string;
+  status: "PENDING" | "PAID" | "CLAIMED" | "EXPIRED";
+  createdApiKeyId?: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  ttlEpochSeconds?: number;
 }
 
 export interface JobRecord {
@@ -160,6 +186,164 @@ export async function createCustomerAndApiKey(customer: CustomerRecord, apiKey: 
           }
         }
       ]
+    })
+  );
+}
+
+export async function getCustomer(customerId: string): Promise<CustomerRecord | null> {
+  const result = await client.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: {
+        PK: customerPk(customerId),
+        SK: "METADATA"
+      }
+    })
+  );
+
+  return (result.Item as CustomerRecord | undefined) ?? null;
+}
+
+export async function putBillingSession(record: BillingSessionRecord): Promise<void> {
+  await client.send(
+    new PutCommand({
+      TableName: tableName,
+      Item: record,
+      ConditionExpression: "attribute_not_exists(PK)"
+    })
+  );
+}
+
+export async function getBillingSession(claimToken: string): Promise<BillingSessionRecord | null> {
+  const result = await client.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: {
+        PK: `BILLING_SESSION#${claimToken}`,
+        SK: "METADATA"
+      }
+    })
+  );
+
+  return (result.Item as BillingSessionRecord | undefined) ?? null;
+}
+
+export async function markBillingSessionPaid(fields: {
+  claimToken: string;
+  checkoutSessionId: string;
+  stripeCustomerId: string;
+  stripeSubscriptionId: string | null;
+}): Promise<void> {
+  await client.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: {
+        PK: `BILLING_SESSION#${fields.claimToken}`,
+        SK: "METADATA"
+      },
+      UpdateExpression:
+        "SET #status = :paid, checkoutSessionId = :checkoutSessionId, stripeCustomerId = :stripeCustomerId, stripeSubscriptionId = :stripeSubscriptionId, updatedAt = :updatedAt",
+      ConditionExpression: "attribute_exists(PK) AND (#status = :pending OR #status = :paid)",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":paid": "PAID",
+        ":pending": "PENDING",
+        ":checkoutSessionId": fields.checkoutSessionId,
+        ":stripeCustomerId": fields.stripeCustomerId,
+        ":stripeSubscriptionId": fields.stripeSubscriptionId,
+        ":updatedAt": nowIso()
+      }
+    })
+  );
+}
+
+export async function claimBillingSessionWithApiKey(
+  session: BillingSessionRecord,
+  customer: CustomerRecord,
+  apiKey: ApiKeyRecord
+): Promise<void> {
+  await client.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Update: {
+            TableName: tableName,
+            Key: {
+              PK: `BILLING_SESSION#${session.claimToken}`,
+              SK: "METADATA"
+            },
+            UpdateExpression: "SET #status = :claimed, createdApiKeyId = :keyId, updatedAt = :updatedAt",
+            ConditionExpression: "#status = :paid AND checkoutSessionId = :checkoutSessionId",
+            ExpressionAttributeNames: {
+              "#status": "status"
+            },
+            ExpressionAttributeValues: {
+              ":claimed": "CLAIMED",
+              ":paid": "PAID",
+              ":checkoutSessionId": session.checkoutSessionId,
+              ":keyId": apiKey.keyId,
+              ":updatedAt": nowIso()
+            }
+          }
+        },
+        {
+          Put: {
+            TableName: tableName,
+            Item: customer,
+            ConditionExpression: "attribute_not_exists(PK)"
+          }
+        },
+        {
+          Put: {
+            TableName: tableName,
+            Item: apiKey,
+            ConditionExpression: "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+          }
+        }
+      ]
+    })
+  );
+}
+
+export async function updateCustomerBillingByStripeCustomer(fields: {
+  stripeCustomerId: string;
+  billingStatus: CustomerRecord["billingStatus"];
+  planId?: string;
+  stripeSubscriptionId?: string | null;
+}): Promise<void> {
+  const result = await client.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: "GSI1",
+      KeyConditionExpression: "GSI1PK = :pk",
+      ExpressionAttributeValues: {
+        ":pk": `STRIPE_CUSTOMER#${fields.stripeCustomerId}`
+      },
+      Limit: 1
+    })
+  );
+  const customer = result.Items?.[0] as CustomerRecord | undefined;
+  if (!customer) {
+    return;
+  }
+
+  await client.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: {
+        PK: customer.PK,
+        SK: "METADATA"
+      },
+      UpdateExpression:
+        "SET billingStatus = :billingStatus, planId = :planId, stripeSubscriptionId = :stripeSubscriptionId, updatedAt = :updatedAt",
+      ExpressionAttributeValues: {
+        ":billingStatus": fields.billingStatus,
+        ":planId": fields.planId ?? customer.planId ?? "unknown",
+        ":stripeSubscriptionId": fields.stripeSubscriptionId ?? customer.stripeSubscriptionId ?? null,
+        ":updatedAt": nowIso()
+      }
     })
   );
 }

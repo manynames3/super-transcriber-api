@@ -44,6 +44,108 @@ Request:
 }
 ```
 
+## POST /v1/billing/checkout
+
+Public route that creates a Stripe Checkout session for a configured paid plan. This works with the API Gateway URL; a custom domain is optional.
+
+Request:
+
+```json
+{
+  "email": "dev@example.com",
+  "planId": "starter"
+}
+```
+
+`successUrl` and `cancelUrl` are optional. When omitted, the API uses the deployed API Gateway health URL as the Stripe redirect target. If provided, they must be HTTPS URLs except for localhost development.
+
+Response:
+
+```json
+{
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "checkoutSessionId": "cs_test_123",
+  "claimToken": "opaque_claim_token",
+  "expiresAt": "2026-05-17T17:30:00.000Z"
+}
+```
+
+## POST /v1/billing/claim
+
+Public route that verifies a paid Stripe Checkout session and returns the plaintext API key once.
+
+Request:
+
+```json
+{
+  "checkoutSessionId": "cs_test_123",
+  "claimToken": "opaque_claim_token"
+}
+```
+
+Response:
+
+```json
+{
+  "customerId": "cust_8d7f2a1c4b3e9a00",
+  "planId": "starter",
+  "billingStatus": "ACTIVE",
+  "keyId": "2f4d6e8a0b1c2d3e4f",
+  "keyPrefix": "stapi_2f4d6e8a0b1c2d3e4f",
+  "apiKey": "stapi_2f4d6e8a0b1c2d3e4f_plaintext-secret-returned-once",
+  "createdAt": "2026-05-16T17:30:00.000Z"
+}
+```
+
+## GET /v1/billing/account
+
+Authenticated route that returns the current customer billing status and enforced limits.
+
+Response:
+
+```json
+{
+  "customerId": "cust_8d7f2a1c4b3e9a00",
+  "planId": "starter",
+  "billingStatus": "ACTIVE",
+  "limits": {
+    "maxActiveJobs": 5,
+    "maxFileSizeBytes": 209715200,
+    "maxDurationSeconds": 1200,
+    "monthlyTranscriptionMinutes": 120
+  },
+  "stripeCustomerId": "cus_123"
+}
+```
+
+## POST /v1/billing/portal
+
+Authenticated route that creates a Stripe Billing Portal session so customers can manage payment methods and subscriptions.
+
+Request:
+
+```json
+{
+  "returnUrl": "https://example.com/account"
+}
+```
+
+Response:
+
+```json
+{
+  "portalUrl": "https://billing.stripe.com/p/session/..."
+}
+```
+
+## POST /v1/billing/webhook
+
+Public Stripe webhook endpoint. Configure this URL in Stripe using the deployed API Gateway URL:
+
+```text
+https://{api-id}.execute-api.{region}.amazonaws.com/v1/billing/webhook
+```
+
 Response:
 
 ```json

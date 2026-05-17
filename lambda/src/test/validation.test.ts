@@ -7,6 +7,7 @@ import {
   decodeCursor,
   encodeCursor,
   parseOwnedUploadS3Key,
+  validateCreateCheckoutRequest,
   validateCreateTranscriptionRequest,
   validateConfigureWebhookRequest,
   validateUploadRequest,
@@ -132,5 +133,27 @@ describe("request validation", () => {
     });
 
     expect(() => validateConfigureWebhookRequest({ url: "http://example.com/webhook" })).toThrow(/https/);
+  });
+
+  it("allows checkout redirects to be omitted before a custom domain exists", () => {
+    expect(
+      validateCreateCheckoutRequest({
+        email: "Dev@Example.com",
+        planId: "starter"
+      })
+    ).toEqual({
+      email: "dev@example.com",
+      planId: "starter",
+      successUrl: undefined,
+      cancelUrl: undefined
+    });
+
+    expect(() =>
+      validateCreateCheckoutRequest({
+        email: "dev@example.com",
+        planId: "starter",
+        successUrl: "http://example.com/success"
+      })
+    ).toThrow(/https/);
   });
 });

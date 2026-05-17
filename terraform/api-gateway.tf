@@ -6,6 +6,21 @@ locals {
     "POST /v1/api-keys" = {
       lambda_key = "create-api-key"
     }
+    "POST /v1/billing/checkout" = {
+      lambda_key = "create-checkout-session"
+    }
+    "POST /v1/billing/webhook" = {
+      lambda_key = "stripe-webhook"
+    }
+    "POST /v1/billing/claim" = {
+      lambda_key = "claim-checkout-session"
+    }
+    "GET /v1/billing/account" = {
+      lambda_key = "get-billing-account"
+    }
+    "POST /v1/billing/portal" = {
+      lambda_key = "create-billing-portal"
+    }
     "POST /v1/webhooks" = {
       lambda_key = "configure-webhook"
     }

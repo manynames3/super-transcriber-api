@@ -9,6 +9,7 @@ flowchart LR
   Developer["External developer or team"] -->|REST JSON and API key| Api["API Gateway HTTP API"]
   Api --> Health["health Lambda"]
   Api --> Admin["create-api-key Lambda"]
+  Api --> Billing["billing Lambdas"]
   Api --> Webhooks["configure-webhook Lambda"]
   Api --> Upload["presign-upload Lambda"]
   Api --> Jobs["job API Lambdas"]
@@ -17,6 +18,8 @@ flowchart LR
   Jobs -->|read/write items| Table["DynamoDB single table"]
   Webhooks --> Table
   Admin -->|hashed API key records| Table
+  Billing -->|Stripe Checkout and Portal| Stripe["Stripe"]
+  Billing -->|paid sessions and customer status| Table
   Jobs -->|enqueue start| StartQueue["SQS transcription-start queue"]
   StartQueue --> StartWorker["start-transcription Lambda"]
   StartWorker -->|StartTranscriptionJob| Transcribe["Amazon Transcribe"]
@@ -48,6 +51,7 @@ sequenceDiagram
   participant Client
   participant API as HTTP API
   participant Lambda as Lambda handlers
+  participant Stripe
   participant DDB as DynamoDB
   participant Q as SQS start queue
   participant Worker as start-transcription Lambda
@@ -62,6 +66,15 @@ sequenceDiagram
   Lambda->>DDB: query APIKEY by key id
   Lambda->>DDB: write PENDING_UPLOAD job and mapping
   Lambda-->>Client: uploadUrl, jobId, s3Key
+  Client->>API: POST /v1/billing/checkout
+  API->>Lambda: create-checkout-session
+  Lambda->>Stripe: create Checkout session
+  Lambda->>DDB: write BILLING_SESSION
+  Stripe->>API: POST /v1/billing/webhook
+  API->>Lambda: stripe-webhook
+  Lambda->>DDB: mark checkout paid
+  Client->>API: POST /v1/billing/claim
+  Lambda->>DDB: create CUSTOMER and hashed API key
   Client->>S3: PUT audio with presigned URL
   Client->>API: POST /v1/transcriptions
   API->>Lambda: create-transcription
@@ -92,13 +105,14 @@ sequenceDiagram
 | --- | --- | --- | --- |
 | Customer metadata | `CUSTOMER#{customerId}` | `METADATA` | Customer profile |
 | API key | `CUSTOMER#{customerId}` | `APIKEY#{keyId}` | Hashed API key and limits |
+| Billing session | `BILLING_SESSION#{claimToken}` | `METADATA` | Stripe Checkout claim state |
 | Job | `CUSTOMER#{customerId}` | `JOB#{jobId}` | Job status and ownership |
 | Transcribe mapping | `TRANSCRIBE#{transcribeJobName}` | `JOB` | Completion event lookup |
 | Webhook | `CUSTOMER#{customerId}` | `WEBHOOK#default` | Completion webhook URL, events, and signing secret |
 | Enrichment | `CUSTOMER#{customerId}` | `ENRICHMENT#{jobId}` | Optional Bedrock enrichment status and output location |
 | Monthly usage | `CUSTOMER#{customerId}` | `USAGE#{yyyy-mm}` | Active jobs and reserved seconds |
 
-GSI1 maps `APIKEY#{keyId}` to the API key record without scans. GSI2 maps `JOBS#{customerId}` to recent jobs by `createdAt#jobId` for cursor pagination.
+GSI1 maps `APIKEY#{keyId}` to the API key record without scans and maps `STRIPE_CUSTOMER#{stripeCustomerId}` to customer metadata for billing webhooks. GSI2 maps `JOBS#{customerId}` to recent jobs by `createdAt#jobId` for cursor pagination. Billing session records include `ttlEpochSeconds` so abandoned checkout attempts expire without manual cleanup.
 
 ## Cost-First Constraints
 

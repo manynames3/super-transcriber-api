@@ -193,6 +193,51 @@ variable "ai_enrichment_max_tokens" {
 
 variable "stripe_secret_arn" {
   type        = string
-  description = "Optional Secrets Manager ARN for Stripe credentials. Empty keeps Stripe disabled."
+  description = "Optional Secrets Manager ARN containing the Stripe secret key. Empty keeps Stripe billing disabled."
   default     = ""
+}
+
+variable "stripe_webhook_secret_arn" {
+  type        = string
+  description = "Optional Secrets Manager ARN containing the Stripe webhook signing secret."
+  default     = ""
+}
+
+variable "stripe_price_ids" {
+  type        = map(string)
+  description = "Map of billing plan ids to Stripe recurring price ids."
+  default     = {}
+}
+
+variable "billing_plan_limits" {
+  type = map(object({
+    name                        = optional(string)
+    maxActiveJobs               = number
+    maxFileSizeBytes            = number
+    maxDurationSeconds          = number
+    monthlyTranscriptionMinutes = number
+    enrichmentEnabled           = optional(bool)
+    webhookEnabled              = optional(bool)
+  }))
+  description = "Plan limits applied to API keys created through Stripe checkout."
+  default = {
+    starter = {
+      name                        = "Starter"
+      maxActiveJobs               = 5
+      maxFileSizeBytes            = 209715200
+      maxDurationSeconds          = 1200
+      monthlyTranscriptionMinutes = 120
+      enrichmentEnabled           = false
+      webhookEnabled              = true
+    }
+    team = {
+      name                        = "Team"
+      maxActiveJobs               = 25
+      maxFileSizeBytes            = 209715200
+      maxDurationSeconds          = 3600
+      monthlyTranscriptionMinutes = 1500
+      enrichmentEnabled           = true
+      webhookEnabled              = true
+    }
+  }
 }

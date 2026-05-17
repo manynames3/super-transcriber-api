@@ -2,7 +2,7 @@ export type JobStatus = "PENDING_UPLOAD" | "QUEUED" | "STARTING" | "IN_PROGRESS"
 
 export interface SuperTranscriberClientOptions {
   baseUrl: string;
-  apiKey: string;
+  apiKey?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -66,9 +66,33 @@ export interface ConfigureWebhookRequest {
   enabled?: boolean;
 }
 
+export interface CreateCheckoutRequest {
+  email: string;
+  planId: string;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface CreateCheckoutResponse {
+  checkoutUrl: string;
+  checkoutSessionId: string;
+  claimToken: string;
+  expiresAt: string;
+}
+
+export interface ClaimCheckoutResponse {
+  customerId: string;
+  planId: string;
+  billingStatus: string;
+  keyId: string;
+  keyPrefix: string;
+  apiKey: string;
+  createdAt: string;
+}
+
 export class SuperTranscriberClient {
   private readonly baseUrl: string;
-  private readonly apiKey: string;
+  private readonly apiKey?: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: SuperTranscriberClientOptions) {
@@ -125,6 +149,28 @@ export class SuperTranscriberClient {
     return this.request("POST", "/v1/webhooks", input);
   }
 
+  async createCheckoutSession(input: CreateCheckoutRequest): Promise<CreateCheckoutResponse> {
+    return this.request("POST", "/v1/billing/checkout", input, false);
+  }
+
+  async claimCheckoutSession(input: { checkoutSessionId: string; claimToken: string }): Promise<ClaimCheckoutResponse> {
+    return this.request("POST", "/v1/billing/claim", input, false);
+  }
+
+  async getBillingAccount(): Promise<{
+    customerId: string;
+    planId: string;
+    billingStatus: string;
+    limits: Record<string, number>;
+    stripeCustomerId?: string;
+  }> {
+    return this.request("GET", "/v1/billing/account");
+  }
+
+  async createBillingPortal(input: { returnUrl: string }): Promise<{ portalUrl: string }> {
+    return this.request("POST", "/v1/billing/portal", input);
+  }
+
   async transcribeUpload(input: PresignUploadRequest, body: BodyInit, options: Omit<CreateTranscriptionRequest, "s3Key" | "fileName"> = {}): Promise<CreateTranscriptionResponse> {
     const presign = await this.presignUpload(input);
     await this.uploadFile(presign, body);
@@ -134,13 +180,20 @@ export class SuperTranscriberClient {
     });
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, authenticated = true): Promise<T> {
+    const headers: Record<string, string> = {
+      "content-type": "application/json"
+    };
+    if (authenticated) {
+      if (!this.apiKey) {
+        throw new Error("apiKey is required for authenticated Super Transcriber API calls");
+      }
+      headers["x-api-key"] = this.apiKey;
+    }
+
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": this.apiKey
-      },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body)
     });
 

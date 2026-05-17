@@ -26,6 +26,7 @@ locals {
     AI_ENRICHMENT_MAX_CHARS               = tostring(var.ai_enrichment_max_chars)
     AI_ENRICHMENT_MAX_TOKENS              = tostring(var.ai_enrichment_max_tokens)
     BEDROCK_MODEL_ID                      = var.bedrock_model_id
+    BILLING_PLAN_LIMITS_JSON              = jsonencode(var.billing_plan_limits)
     BUILD_VERSION                         = var.build_version
     DEFAULT_LANGUAGE_CODE                 = var.default_language_code
     ENRICHMENT_QUEUE_URL                  = aws_sqs_queue.enrichment.url
@@ -34,7 +35,9 @@ locals {
     MAX_FILE_SIZE_BYTES                   = tostring(var.max_file_size_bytes)
     MONTHLY_TRANSCRIPTION_MINUTES         = tostring(var.monthly_transcription_minutes)
     STRIPE_ENABLED                        = var.stripe_secret_arn == "" ? "false" : "true"
+    STRIPE_PRICE_IDS_JSON                 = jsonencode(var.stripe_price_ids)
     STRIPE_SECRET_ARN                     = var.stripe_secret_arn
+    STRIPE_WEBHOOK_SECRET_ARN             = var.stripe_webhook_secret_arn
     TABLE_NAME                            = aws_dynamodb_table.main.name
     TRANSCRIPTION_START_MAX_RECEIVE_COUNT = tostring(var.transcription_start_max_receive_count)
     TRANSCRIPT_BUCKET                     = aws_s3_bucket.transcripts.bucket
@@ -56,6 +59,31 @@ locals {
       filename    = "${path.module}/../lambda/dist/zips/create-api-key.zip"
       memory_size = 128
       timeout     = 10
+    }
+    create-checkout-session = {
+      filename    = "${path.module}/../lambda/dist/zips/create-checkout-session.zip"
+      memory_size = 128
+      timeout     = 15
+    }
+    stripe-webhook = {
+      filename    = "${path.module}/../lambda/dist/zips/stripe-webhook.zip"
+      memory_size = 128
+      timeout     = 15
+    }
+    claim-checkout-session = {
+      filename    = "${path.module}/../lambda/dist/zips/claim-checkout-session.zip"
+      memory_size = 128
+      timeout     = 15
+    }
+    get-billing-account = {
+      filename    = "${path.module}/../lambda/dist/zips/get-billing-account.zip"
+      memory_size = 128
+      timeout     = 10
+    }
+    create-billing-portal = {
+      filename    = "${path.module}/../lambda/dist/zips/create-billing-portal.zip"
+      memory_size = 128
+      timeout     = 15
     }
     configure-webhook = {
       filename    = "${path.module}/../lambda/dist/zips/configure-webhook.zip"

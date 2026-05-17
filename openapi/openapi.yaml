@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Super Transcriber API
   version: 0.2.0
-  description: API-first transcription backend for private S3 uploads, asynchronous jobs, webhooks, and optional AI enrichment.
+  description: API-first transcription backend for private S3 uploads, asynchronous jobs, self-serve billing, webhooks, and optional AI enrichment.
 servers:
   - url: https://api.example.com
 security:
@@ -23,6 +23,57 @@ paths:
       responses:
         "201":
           description: Created API key. Plaintext key is returned once.
+  /v1/billing/checkout:
+    post:
+      security: []
+      summary: Create a Stripe Checkout session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckoutRequest"
+      responses:
+        "200":
+          description: Checkout session URL and claim token
+  /v1/billing/webhook:
+    post:
+      security: []
+      summary: Stripe webhook receiver
+      responses:
+        "200":
+          description: Webhook accepted
+  /v1/billing/claim:
+    post:
+      security: []
+      summary: Claim a paid checkout session and receive an API key once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimCheckoutRequest"
+      responses:
+        "201":
+          description: API key created for paid checkout session
+  /v1/billing/account:
+    get:
+      summary: Get authenticated customer billing status and limits
+      responses:
+        "200":
+          description: Billing account status
+  /v1/billing/portal:
+    post:
+      summary: Create a Stripe Billing Portal session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingPortalRequest"
+      responses:
+        "200":
+          description: Billing portal URL
   /v1/uploads/presign:
     post:
       summary: Create a private S3 upload URL
@@ -244,3 +295,36 @@ components:
             enum: [transcription.completed, transcription.failed]
         enabled:
           type: boolean
+    CreateCheckoutRequest:
+      type: object
+      required: [email, planId]
+      properties:
+        email:
+          type: string
+          format: email
+        planId:
+          type: string
+          examples: [starter]
+        successUrl:
+          type: string
+          format: uri
+          description: Optional. Defaults to the API Gateway health URL, with checkout placeholders added.
+        cancelUrl:
+          type: string
+          format: uri
+          description: Optional. Defaults to the API Gateway health URL.
+    ClaimCheckoutRequest:
+      type: object
+      required: [checkoutSessionId, claimToken]
+      properties:
+        checkoutSessionId:
+          type: string
+        claimToken:
+          type: string
+    BillingPortalRequest:
+      type: object
+      required: [returnUrl]
+      properties:
+        returnUrl:
+          type: string
+          format: uri

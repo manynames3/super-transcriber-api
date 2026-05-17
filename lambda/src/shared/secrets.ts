@@ -2,6 +2,7 @@ import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-sec
 
 const secrets = new SecretsManagerClient({});
 let cachedAdminToken: string | null | undefined;
+const secretCache = new Map<string, string | null>();
 
 export async function getAdminToken(): Promise<string | null> {
   if (cachedAdminToken !== undefined) {
@@ -21,6 +22,24 @@ export async function getAdminToken(): Promise<string | null> {
 
   cachedAdminToken = process.env.ADMIN_TOKEN ?? null;
   return cachedAdminToken;
+}
+
+export async function getSecretString(secretArn: string | undefined): Promise<string | null> {
+  if (!secretArn) {
+    return null;
+  }
+  if (secretCache.has(secretArn)) {
+    return secretCache.get(secretArn) ?? null;
+  }
+
+  const result = await secrets.send(
+    new GetSecretValueCommand({
+      SecretId: secretArn
+    })
+  );
+  const secretString = result.SecretString ?? null;
+  secretCache.set(secretArn, secretString);
+  return secretString;
 }
 
 function parseSecretString(secretString: string | undefined): string | null {

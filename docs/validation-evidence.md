@@ -39,3 +39,21 @@ This file records validation commands for the initial repository baseline.
 | `terraform init -backend=false` in `terraform/` | Passed. Reused locked AWS provider. |
 | `terraform validate` in `terraform/` | Passed. Terraform reported the configuration is valid. |
 | `git diff --check` | Passed. |
+
+## Monetized Product Update
+
+| Command | Result |
+| --- | --- |
+| `npm install stripe` in `lambda/` | Passed. Added Stripe SDK. |
+| `npm run build` in `lambda/` | Passed after adding checkout, claim, webhook, account, and billing portal handlers. |
+| `npm test` in `lambda/` | Passed. 4 test files and 16 tests passed. |
+| `npm run bundle` in `lambda/` | Passed. Built zip artifacts for 17 Lambda handlers. |
+| `npm run build` in `sdk/typescript/` | Passed. SDK compiled with billing helpers. |
+| `npm audit` in `lambda/` | Passed with 0 vulnerabilities. |
+| `npm audit` in `sdk/typescript/` | Passed with 0 vulnerabilities. |
+| `terraform fmt -check -recursive` | Passed. |
+| `terraform init -backend=false` in `terraform/` | Passed. Reused locked AWS provider. |
+| `terraform validate` in `terraform/` | Passed. Terraform reported the configuration is valid. |
+| `git diff --check` | Passed. |
+
+Additional hardening in this pass: checkout redirect URLs are optional so API Gateway can be used before a custom domain exists, Stripe subscription updates map plan ids from configured price ids, and abandoned checkout session records use DynamoDB TTL cleanup.

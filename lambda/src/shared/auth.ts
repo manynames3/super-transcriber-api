@@ -1,5 +1,5 @@
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
-import { findApiKeyById } from "./dynamodb.js";
+import { findApiKeyById, getCustomer } from "./dynamodb.js";
 import { forbidden, internalError, unauthorized } from "./errors.js";
 import { hashApiKey, parseApiKey, safeCompareHex } from "./crypto.js";
 import { getLimitConfigFromEnv, mergeLimitConfig, type LimitConfig } from "./validation.js";
@@ -27,7 +27,7 @@ export function extractApiKeyFromHeaders(headers: APIGatewayProxyEventV2["header
   return bearerMatch?.[1]?.trim() ?? null;
 }
 
-export async function authenticate(event: APIGatewayProxyEventV2): Promise<AuthContext> {
+export async function authenticate(event: APIGatewayProxyEventV2, options: { allowBillingBlocked?: boolean } = {}): Promise<AuthContext> {
   const apiKey = extractApiKeyFromHeaders(event.headers);
   if (!apiKey) {
     throw unauthorized();
@@ -46,6 +46,11 @@ export async function authenticate(event: APIGatewayProxyEventV2): Promise<AuthC
   const candidateHash = hashApiKey(apiKey);
   if (!safeCompareHex(candidateHash, apiKeyRecord.keyHash)) {
     throw unauthorized();
+  }
+
+  const customer = await getCustomer(apiKeyRecord.customerId);
+  if (!options.allowBillingBlocked && customer?.billingStatus && ["PAST_DUE", "CANCELED", "UNPAID"].includes(customer.billingStatus)) {
+    throw forbidden("Billing status does not allow API access");
   }
 
   return {

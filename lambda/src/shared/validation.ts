@@ -44,6 +44,22 @@ export interface ConfigureWebhookRequest {
   enabled: boolean;
 }
 
+export interface CreateCheckoutRequest {
+  email: string;
+  planId: string;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface ClaimCheckoutRequest {
+  checkoutSessionId: string;
+  claimToken: string;
+}
+
+export interface BillingPortalRequest {
+  returnUrl: string;
+}
+
 export function parseJsonBody<T>(body: string | null | undefined): T {
   if (!body) {
     throw badRequest("Request body must be valid JSON", "INVALID_JSON");
@@ -225,6 +241,43 @@ export function validateConfigureWebhookRequest(input: unknown): ConfigureWebhoo
   };
 }
 
+export function validateCreateCheckoutRequest(input: unknown): CreateCheckoutRequest {
+  const record = asRecord(input);
+  const email = requireString(record, "email").toLowerCase();
+  const planId = requireString(record, "planId");
+  const successUrl = optionalString(record, "successUrl");
+  const cancelUrl = optionalString(record, "cancelUrl");
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    throw badRequest("email must be a valid email address", "INVALID_EMAIL");
+  }
+  if (!/^[A-Za-z0-9_-]{2,64}$/.test(planId)) {
+    throw badRequest("planId is invalid", "INVALID_PLAN");
+  }
+
+  return {
+    email,
+    planId,
+    successUrl: successUrl ? parseRedirectUrl(successUrl).toString() : undefined,
+    cancelUrl: cancelUrl ? parseRedirectUrl(cancelUrl).toString() : undefined
+  };
+}
+
+export function validateClaimCheckoutRequest(input: unknown): ClaimCheckoutRequest {
+  const record = asRecord(input);
+  return {
+    checkoutSessionId: requireString(record, "checkoutSessionId"),
+    claimToken: requireString(record, "claimToken")
+  };
+}
+
+export function validateBillingPortalRequest(input: unknown): BillingPortalRequest {
+  const record = asRecord(input);
+  return {
+    returnUrl: parseRedirectUrl(requireString(record, "returnUrl")).toString()
+  };
+}
+
 function assertAllowedAudio(fileName: string, contentType?: string): void {
   const extension = fileName.split(".").pop()?.toLowerCase();
   if (!extension || !allowedExtensions.has(extension)) {
@@ -247,6 +300,21 @@ function parseWebhookUrl(value: string): URL {
   const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
   if (parsed.protocol !== "https:" && !(isLocalhost && parsed.protocol === "http:")) {
     throw badRequest("Webhook url must use https, except localhost for development", "INVALID_WEBHOOK_URL");
+  }
+  return parsed;
+}
+
+function parseRedirectUrl(value: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw badRequest("redirect URL must be valid", "INVALID_REDIRECT_URL");
+  }
+
+  const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  if (parsed.protocol !== "https:" && !(isLocalhost && parsed.protocol === "http:")) {
+    throw badRequest("redirect URL must use https, except localhost for development", "INVALID_REDIRECT_URL");
   }
   return parsed;
 }

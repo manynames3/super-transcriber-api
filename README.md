@@ -89,6 +89,22 @@ const presign = await client.presignUpload({
 });
 ```
 
+Create a paid self-serve checkout session without needing a custom domain.
+
+```bash
+curl -sS -X POST "$API_BASE_URL/v1/billing/checkout" \
+  -H "content-type: application/json" \
+  -d '{"email":"dev@example.com","planId":"starter"}'
+```
+
+`successUrl` and `cancelUrl` are optional. If you omit them, the API uses the deployed API Gateway URL as the Stripe redirect target, so the paid flow works before you have a custom domain. After Stripe redirects back, or by using the `checkoutSessionId` and `claimToken` returned by the checkout response, claim the API key once.
+
+```bash
+curl -sS -X POST "$API_BASE_URL/v1/billing/claim" \
+  -H "content-type: application/json" \
+  -d '{"checkoutSessionId":"cs_test_...","claimToken":"claim_token_from_success_redirect"}'
+```
+
 ## Architecture Summary
 
 Requests enter through API Gateway HTTP API and are routed to small Node.js 20 Lambda handlers on arm64. DynamoDB uses a single-table PAY_PER_REQUEST model for customers, hashed API keys, jobs, Transcribe mappings, webhook config, optional enrichment metadata, and monthly usage counters. S3 stores uploaded audio, transcript JSON, and optional enrichment JSON in private buckets with lifecycle expiration. SQS decouples job submission from Transcribe start, webhook delivery, and optional AI enrichment. Amazon Transcribe runs asynchronous jobs, and EventBridge invokes a completion Lambda when jobs finish or fail.
@@ -105,6 +121,7 @@ Requests enter through API Gateway HTTP API and are routed to small Node.js 20 L
 - CloudWatch Logs with Terraform-managed 14-day retention
 - Optional CloudWatch alarms, disabled by default
 - Optional Amazon Bedrock transcript enrichment, disabled by default
+- Optional Stripe Checkout and Billing Portal, disabled unless Stripe secrets and price ids are configured
 
 ## Cost Controls
 
@@ -113,6 +130,8 @@ Requests enter through API Gateway HTTP API and are routed to small Node.js 20 L
 - S3 lifecycle rules expire uploads and transcripts.
 - Lambda and API Gateway are request driven.
 - SQS-triggered workers run only while jobs are queued.
+- Stripe and Bedrock paths are request/event driven; they do not add meaningful idle compute cost.
+- A monetized idle deployment is designed to stay under $3/month before traffic: the main predictable cost is Secrets Manager, typically two Stripe secrets plus one optional admin secret.
 - Default limits are 5 active jobs, 200 MB files, 20 minute audio duration, and 120 monthly transcription minutes.
 - Duration is reserved before starting Transcribe. If `durationSeconds` is omitted, the full 20 minute maximum is reserved.
 
@@ -126,6 +145,6 @@ The active CI workflow installs Lambda and SDK dependencies, runs TypeScript che
 
 ## Implemented vs Not Implemented
 
-Implemented: API-key creation, hashed API-key auth, presigned S3 uploads, durable SQS-backed transcription starts, explicit job lifecycle states, DynamoDB job storage, cursor pagination, soft deletion, Transcribe completion handling, transcript retrieval, webhook configuration and delivery, optional Bedrock enrichment, usage counters, Terraform infrastructure, per-Lambda IAM roles, OpenAPI contract, TypeScript SDK, unit tests, and CI.
+Implemented: Stripe Checkout monetization, one-time paid checkout claiming, Billing Portal session creation, API-key creation, hashed API-key auth, presigned S3 uploads, durable SQS-backed transcription starts, explicit job lifecycle states, DynamoDB job storage, cursor pagination, soft deletion, Transcribe completion handling, transcript retrieval, webhook configuration and delivery, optional Bedrock enrichment, usage counters, Terraform infrastructure, per-Lambda IAM roles, OpenAPI contract, TypeScript SDK, unit tests, and CI.
 
-Not implemented in v1: direct `sourceUrl` ingestion and Stripe billing calls. `sourceUrl` returns `501 NOT_IMPLEMENTED`. Stripe is represented as an optional configuration path and remains disabled unless Stripe environment configuration is supplied.
+Not implemented in v1: direct `sourceUrl` ingestion. `sourceUrl` returns `501 NOT_IMPLEMENTED`. Stripe remains optional and disabled unless Stripe secrets and price ids are configured.
