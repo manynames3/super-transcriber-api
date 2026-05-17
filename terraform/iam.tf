@@ -25,7 +25,7 @@ locals {
       bedrock_actions             = []
     }
     create-api-key = {
-      dynamodb_actions            = ["dynamodb:TransactWriteItems"]
+      dynamodb_actions            = ["dynamodb:PutItem", "dynamodb:TransactWriteItems"]
       dynamodb_resources          = [aws_dynamodb_table.main.arn]
       s3_actions                  = []
       s3_resources                = []
@@ -64,7 +64,7 @@ locals {
       bedrock_actions             = []
     }
     claim-checkout-session = {
-      dynamodb_actions            = ["dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:TransactWriteItems"]
+      dynamodb_actions            = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:TransactWriteItems"]
       dynamodb_resources          = [aws_dynamodb_table.main.arn]
       s3_actions                  = []
       s3_resources                = []
@@ -116,7 +116,7 @@ locals {
       bedrock_actions             = []
     }
     presign-upload = {
-      dynamodb_actions            = ["dynamodb:Query", "dynamodb:TransactWriteItems"]
+      dynamodb_actions            = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:TransactWriteItems"]
       dynamodb_resources          = [aws_dynamodb_table.main.arn, "${aws_dynamodb_table.main.arn}/index/*"]
       s3_actions                  = ["s3:PutObject"]
       s3_resources                = ["${aws_s3_bucket.uploads.arn}/customers/*/uploads/*"]
@@ -168,7 +168,7 @@ locals {
       bedrock_actions             = []
     }
     list-transcriptions = {
-      dynamodb_actions            = ["dynamodb:Query"]
+      dynamodb_actions            = ["dynamodb:GetItem", "dynamodb:Query"]
       dynamodb_resources          = [aws_dynamodb_table.main.arn, "${aws_dynamodb_table.main.arn}/index/*"]
       s3_actions                  = []
       s3_resources                = []

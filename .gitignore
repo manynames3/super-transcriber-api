@@ -3,6 +3,8 @@ dist/
 .terraform/
 terraform.tfstate
 terraform.tfstate.*
+terraform/terraform.tfvars
+terraform/tfplan
 *.tfplan
 .DS_Store
 .env

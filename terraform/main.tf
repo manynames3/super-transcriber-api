@@ -11,7 +11,7 @@ data "aws_region" "current" {}
 
 locals {
   name_prefix    = lower("${var.project_name}-${var.environment}")
-  s3_name_prefix = replace(local.name_prefix, "_", "-")
+  s3_name_prefix = substr(replace(local.name_prefix, "_", "-"), 0, 24)
 
   common_tags = {
     Project     = var.project_name

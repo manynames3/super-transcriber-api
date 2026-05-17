@@ -18,6 +18,13 @@ export function emptyResponse(statusCode = 204): APIGatewayProxyStructuredResult
 }
 
 export function errorResponse(error: unknown): APIGatewayProxyStructuredResultV2 {
+  if (!(error instanceof ApiError)) {
+    logError("handler_unhandled_error", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+
   const apiError = error instanceof ApiError ? error : internalError();
   return jsonResponse(apiError.statusCode, {
     success: false,
