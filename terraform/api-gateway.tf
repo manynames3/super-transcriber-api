@@ -1,5 +1,8 @@
 locals {
   http_routes = {
+    "GET /" = {
+      lambda_key = "health"
+    }
     "GET /health" = {
       lambda_key = "health"
     }

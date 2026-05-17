@@ -61,6 +61,8 @@ curl -sS "$API_BASE_URL/v1/transcriptions/$JOB_ID" -H "x-api-key: $API_KEY"
 curl -sS "$API_BASE_URL/v1/transcriptions?limit=20" -H "x-api-key: $API_KEY"
 ```
 
+Opening `$API_BASE_URL` directly returns the public API status payload. `GET /health` returns the same health response for uptime checks.
+
 The `jobId` returned from the presign step is the same `jobId` used for transcription status, so clients can create one durable id before the audio upload starts.
 
 Configure a completion webhook.

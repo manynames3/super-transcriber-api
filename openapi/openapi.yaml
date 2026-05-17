@@ -8,6 +8,13 @@ servers:
 security:
   - ApiKeyAuth: []
 paths:
+  /:
+    get:
+      security: []
+      summary: API root status
+      responses:
+        "200":
+          description: Service health
   /health:
     get:
       security: []

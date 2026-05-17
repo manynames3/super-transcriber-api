@@ -10,6 +10,10 @@ All authenticated routes accept either `x-api-key: <key>` or `Authorization: Bea
 }
 ```
 
+## GET /
+
+Public API root status endpoint. This returns the same basic health payload as `GET /health`, so opening the deployed API base URL in a browser gives a useful response instead of API Gateway's default `404`.
+
 ## GET /health
 
 Public health endpoint.
