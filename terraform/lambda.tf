@@ -2,7 +2,7 @@ resource "aws_lambda_function" "handlers" {
   for_each = local.lambda_functions
 
   function_name                  = "${local.name_prefix}-${each.key}"
-  role                           = aws_iam_role.lambda.arn
+  role                           = aws_iam_role.lambda[each.key].arn
   handler                        = "index.handler"
   runtime                        = "nodejs20.x"
   architectures                  = ["arm64"]
@@ -18,6 +18,7 @@ resource "aws_lambda_function" "handlers" {
 
   depends_on = [
     aws_cloudwatch_log_group.lambda,
-    aws_iam_role_policy.lambda
+    aws_iam_role_policy.lambda,
+    aws_secretsmanager_secret_version.admin_token
   ]
 }

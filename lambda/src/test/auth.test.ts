@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractApiKeyFromHeaders } from "../shared/auth.js";
-import { generateApiKey, hashApiKey, parseApiKey, safeCompareHex } from "../shared/crypto.js";
+import { generateApiKey, generateWebhookSigningSecret, hashApiKey, parseApiKey, safeCompareHex, signWebhookPayload } from "../shared/crypto.js";
 
 describe("api key handling", () => {
   it("extracts bearer and x-api-key headers", () => {
@@ -23,5 +23,14 @@ describe("api key handling", () => {
 
   it("rejects malformed keys before lookup", () => {
     expect(parseApiKey("plain-text-key")).toBeNull();
+  });
+
+  it("creates deterministic webhook signatures for a timestamp and payload", () => {
+    const secret = generateWebhookSigningSecret();
+    const signature = signWebhookPayload(secret, "{\"ok\":true}", "2026-05-16T00:00:00.000Z");
+
+    expect(secret).toMatch(/^whsec_/);
+    expect(signature).toMatch(/^[a-f0-9]{64}$/);
+    expect(signWebhookPayload(secret, "{\"ok\":true}", "2026-05-16T00:00:00.000Z")).toBe(signature);
   });
 });

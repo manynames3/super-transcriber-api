@@ -2,7 +2,7 @@ import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
 import { authenticate } from "../shared/auth.js";
-import { requireVisibleJob } from "../shared/dynamodb.js";
+import { getEnrichmentRecord, requireVisibleJob } from "../shared/dynamodb.js";
 import { internalError } from "../shared/errors.js";
 import { errorResponse, jsonResponse, logInfo } from "../shared/response.js";
 import { summarizeTranscript } from "../shared/transcript-format.js";
@@ -50,6 +50,17 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
         }),
         { expiresIn: Number(process.env.TRANSCRIPT_PRESIGN_SECONDS ?? "900") }
       );
+      const enrichment = await getEnrichmentRecord(auth.customerId, job.jobId);
+      if (enrichment?.s3Key) {
+        body.enrichmentJsonUrl = await getSignedUrl(
+          s3,
+          new GetObjectCommand({
+            Bucket: transcriptBucket,
+            Key: enrichment.s3Key
+          }),
+          { expiresIn: Number(process.env.TRANSCRIPT_PRESIGN_SECONDS ?? "900") }
+        );
+      }
     }
 
     logInfo("transcription_read", {

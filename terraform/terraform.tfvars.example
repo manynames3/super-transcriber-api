@@ -2,8 +2,9 @@ project_name = "super-transcriber-api"
 environment  = "dev"
 aws_region   = "us-east-1"
 
-admin_token   = "replace-with-a-long-random-token"
-build_version = "dev-local"
+admin_token            = "replace-with-a-long-random-token"
+admin_token_secret_arn = ""
+build_version          = "dev-local"
 
 cors_allowed_origins = ["https://example.com"]
 
@@ -17,5 +18,14 @@ transcript_retention_days = 30
 
 enable_cloudwatch_alarms      = false
 enable_point_in_time_recovery = false
+
+transcription_start_max_receive_count = 3
+webhook_max_receive_count             = 5
+webhook_timeout_ms                    = 10000
+
+enable_ai_enrichment    = false
+bedrock_model_id        = "anthropic.claude-3-haiku-20240307-v1:0"
+ai_enrichment_max_chars = 12000
+ai_enrichment_max_tokens = 1200
 
 stripe_secret_arn = ""

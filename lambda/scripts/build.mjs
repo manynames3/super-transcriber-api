@@ -11,12 +11,16 @@ const zipDir = join(distDir, "zips");
 const handlers = [
   "health",
   "create-api-key",
+  "configure-webhook",
   "presign-upload",
   "create-transcription",
+  "start-transcription",
   "get-transcription",
   "list-transcriptions",
   "delete-transcription",
-  "completion"
+  "completion",
+  "deliver-webhook",
+  "enrich-transcript"
 ];
 
 rmSync(distDir, { recursive: true, force: true });

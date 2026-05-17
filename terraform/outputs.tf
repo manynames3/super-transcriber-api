@@ -22,3 +22,23 @@ output "completion_dlq_url" {
   description = "SQS DLQ URL for EventBridge completion target failures."
   value       = aws_sqs_queue.transcribe_completion_dlq.url
 }
+
+output "transcription_start_queue_url" {
+  description = "SQS queue URL for durable transcription start requests."
+  value       = aws_sqs_queue.transcription_start.url
+}
+
+output "transcription_start_dlq_url" {
+  description = "SQS DLQ URL for exhausted transcription start requests."
+  value       = aws_sqs_queue.transcription_start_dlq.url
+}
+
+output "webhook_delivery_dlq_url" {
+  description = "SQS DLQ URL for failed webhook delivery attempts."
+  value       = aws_sqs_queue.webhook_delivery_dlq.url
+}
+
+output "enrichment_dlq_url" {
+  description = "SQS DLQ URL for failed optional AI enrichment jobs."
+  value       = aws_sqs_queue.enrichment_dlq.url
+}

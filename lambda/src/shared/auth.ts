@@ -3,6 +3,7 @@ import { findApiKeyById } from "./dynamodb.js";
 import { forbidden, internalError, unauthorized } from "./errors.js";
 import { hashApiKey, parseApiKey, safeCompareHex } from "./crypto.js";
 import { getLimitConfigFromEnv, mergeLimitConfig, type LimitConfig } from "./validation.js";
+import { getAdminToken } from "./secrets.js";
 
 export interface AuthContext {
   customerId: string;
@@ -54,8 +55,8 @@ export async function authenticate(event: APIGatewayProxyEventV2): Promise<AuthC
   };
 }
 
-export function requireAdmin(event: APIGatewayProxyEventV2): void {
-  const adminToken = process.env.ADMIN_TOKEN;
+export async function requireAdmin(event: APIGatewayProxyEventV2): Promise<void> {
+  const adminToken = await getAdminToken();
   if (!adminToken) {
     throw internalError("Admin route is not configured");
   }

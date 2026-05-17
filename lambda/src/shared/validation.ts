@@ -38,6 +38,12 @@ export interface CreateTranscriptionRequest {
   speakerCount?: number;
 }
 
+export interface ConfigureWebhookRequest {
+  url: string;
+  events: Array<"transcription.completed" | "transcription.failed">;
+  enabled: boolean;
+}
+
 export function parseJsonBody<T>(body: string | null | undefined): T {
   if (!body) {
     throw badRequest("Request body must be valid JSON", "INVALID_JSON");
@@ -205,6 +211,20 @@ export function parsePageLimit(value: string | undefined, defaultLimit = 20, max
   return parsed;
 }
 
+export function validateConfigureWebhookRequest(input: unknown): ConfigureWebhookRequest {
+  const record = asRecord(input);
+  const url = requireString(record, "url");
+  const parsedUrl = parseWebhookUrl(url);
+  const events = parseWebhookEvents(record.events);
+  const enabled = typeof record.enabled === "boolean" ? record.enabled : true;
+
+  return {
+    url: parsedUrl.toString(),
+    events,
+    enabled
+  };
+}
+
 function assertAllowedAudio(fileName: string, contentType?: string): void {
   const extension = fileName.split(".").pop()?.toLowerCase();
   if (!extension || !allowedExtensions.has(extension)) {
@@ -214,6 +234,42 @@ function assertAllowedAudio(fileName: string, contentType?: string): void {
   if (contentType && !allowedContentTypes.has(contentType)) {
     throw badRequest("contentType must be an mp3 or m4a audio type", "UNSUPPORTED_MEDIA_TYPE");
   }
+}
+
+function parseWebhookUrl(value: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw badRequest("url must be a valid URL", "INVALID_WEBHOOK_URL");
+  }
+
+  const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  if (parsed.protocol !== "https:" && !(isLocalhost && parsed.protocol === "http:")) {
+    throw badRequest("Webhook url must use https, except localhost for development", "INVALID_WEBHOOK_URL");
+  }
+  return parsed;
+}
+
+function parseWebhookEvents(value: unknown): Array<"transcription.completed" | "transcription.failed"> {
+  const defaultEvents: Array<"transcription.completed" | "transcription.failed"> = [
+    "transcription.completed",
+    "transcription.failed"
+  ];
+  if (value === undefined || value === null) {
+    return defaultEvents;
+  }
+  if (!Array.isArray(value) || value.length === 0) {
+    throw badRequest("events must be a non-empty array", "INVALID_WEBHOOK_EVENTS");
+  }
+
+  const allowed = new Set(defaultEvents);
+  return value.map((event) => {
+    if (typeof event !== "string" || !allowed.has(event as "transcription.completed" | "transcription.failed")) {
+      throw badRequest("events contains an unsupported webhook event", "INVALID_WEBHOOK_EVENTS");
+    }
+    return event as "transcription.completed" | "transcription.failed";
+  });
 }
 
 function readPositiveInteger(name: string, fallback: number): number {

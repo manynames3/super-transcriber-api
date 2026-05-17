@@ -16,7 +16,7 @@ interface CreateApiKeyBody {
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyStructuredResultV2> {
   try {
-    requireAdmin(event);
+    await requireAdmin(event);
     const body = event.body ? parseJsonBody<CreateApiKeyBody>(event.body) : {};
     const customerId = sanitizeCustomerId(body.customerId ?? `cust_${randomBytes(8).toString("hex")}`);
     const customerName = body.customerName?.trim() || customerId;

@@ -21,20 +21,29 @@ locals {
   }
 
   lambda_environment = {
-    ADMIN_TOKEN                   = var.admin_token
-    BUILD_VERSION                 = var.build_version
-    DEFAULT_LANGUAGE_CODE         = var.default_language_code
-    MAX_ACTIVE_JOBS               = tostring(var.max_active_jobs)
-    MAX_DURATION_SECONDS          = tostring(var.max_duration_seconds)
-    MAX_FILE_SIZE_BYTES           = tostring(var.max_file_size_bytes)
-    MONTHLY_TRANSCRIPTION_MINUTES = tostring(var.monthly_transcription_minutes)
-    STRIPE_ENABLED                = var.stripe_secret_arn == "" ? "false" : "true"
-    STRIPE_SECRET_ARN             = var.stripe_secret_arn
-    TABLE_NAME                    = aws_dynamodb_table.main.name
-    TRANSCRIPT_BUCKET             = aws_s3_bucket.transcripts.bucket
-    TRANSCRIPT_PRESIGN_SECONDS    = tostring(var.transcript_presign_seconds)
-    UPLOAD_BUCKET                 = aws_s3_bucket.uploads.bucket
-    UPLOAD_PRESIGN_SECONDS        = tostring(var.upload_presign_seconds)
+    ADMIN_TOKEN_SECRET_ARN                = local.admin_token_secret_arn
+    AI_ENRICHMENT_ENABLED                 = tostring(var.enable_ai_enrichment)
+    AI_ENRICHMENT_MAX_CHARS               = tostring(var.ai_enrichment_max_chars)
+    AI_ENRICHMENT_MAX_TOKENS              = tostring(var.ai_enrichment_max_tokens)
+    BEDROCK_MODEL_ID                      = var.bedrock_model_id
+    BUILD_VERSION                         = var.build_version
+    DEFAULT_LANGUAGE_CODE                 = var.default_language_code
+    ENRICHMENT_QUEUE_URL                  = aws_sqs_queue.enrichment.url
+    MAX_ACTIVE_JOBS                       = tostring(var.max_active_jobs)
+    MAX_DURATION_SECONDS                  = tostring(var.max_duration_seconds)
+    MAX_FILE_SIZE_BYTES                   = tostring(var.max_file_size_bytes)
+    MONTHLY_TRANSCRIPTION_MINUTES         = tostring(var.monthly_transcription_minutes)
+    STRIPE_ENABLED                        = var.stripe_secret_arn == "" ? "false" : "true"
+    STRIPE_SECRET_ARN                     = var.stripe_secret_arn
+    TABLE_NAME                            = aws_dynamodb_table.main.name
+    TRANSCRIPTION_START_MAX_RECEIVE_COUNT = tostring(var.transcription_start_max_receive_count)
+    TRANSCRIPT_BUCKET                     = aws_s3_bucket.transcripts.bucket
+    TRANSCRIPT_PRESIGN_SECONDS            = tostring(var.transcript_presign_seconds)
+    TRANSCRIPTION_START_QUEUE_URL         = aws_sqs_queue.transcription_start.url
+    UPLOAD_BUCKET                         = aws_s3_bucket.uploads.bucket
+    UPLOAD_PRESIGN_SECONDS                = tostring(var.upload_presign_seconds)
+    WEBHOOK_DELIVERY_QUEUE_URL            = aws_sqs_queue.webhook_delivery.url
+    WEBHOOK_TIMEOUT_MS                    = tostring(var.webhook_timeout_ms)
   }
 
   lambda_functions = {
@@ -48,6 +57,11 @@ locals {
       memory_size = 128
       timeout     = 10
     }
+    configure-webhook = {
+      filename    = "${path.module}/../lambda/dist/zips/configure-webhook.zip"
+      memory_size = 128
+      timeout     = 10
+    }
     presign-upload = {
       filename    = "${path.module}/../lambda/dist/zips/presign-upload.zip"
       memory_size = 128
@@ -57,6 +71,11 @@ locals {
       filename    = "${path.module}/../lambda/dist/zips/create-transcription.zip"
       memory_size = 256
       timeout     = 30
+    }
+    start-transcription = {
+      filename    = "${path.module}/../lambda/dist/zips/start-transcription.zip"
+      memory_size = 256
+      timeout     = 60
     }
     get-transcription = {
       filename    = "${path.module}/../lambda/dist/zips/get-transcription.zip"
@@ -77,6 +96,16 @@ locals {
       filename    = "${path.module}/../lambda/dist/zips/completion.zip"
       memory_size = 256
       timeout     = 30
+    }
+    deliver-webhook = {
+      filename    = "${path.module}/../lambda/dist/zips/deliver-webhook.zip"
+      memory_size = 128
+      timeout     = 20
+    }
+    enrich-transcript = {
+      filename    = "${path.module}/../lambda/dist/zips/enrich-transcript.zip"
+      memory_size = 512
+      timeout     = 60
     }
   }
 }

@@ -22,3 +22,20 @@ This file records validation commands for the initial repository baseline.
 | `npm run bundle` in `lambda/` | Passed. Rebuilt zip artifacts for 8 Lambda handlers. |
 | `npm audit` in `lambda/` | Passed with 0 vulnerabilities. |
 | `git diff --check` | Passed. |
+
+## Enterprise Architecture Upgrade
+
+| Command | Result |
+| --- | --- |
+| `npm install` in `lambda/` | Passed. Added SQS, Secrets Manager, and Bedrock Runtime SDK clients. |
+| `npm run build` in `lambda/` | Passed after adding queue workers, webhooks, and enrichment handlers. |
+| `npm test` in `lambda/` | Passed. 4 test files and 15 tests passed. |
+| `npm run bundle` in `lambda/` | Passed. Built zip artifacts for 12 Lambda handlers. |
+| `npm install` in `sdk/typescript/` | Passed. Created SDK package lock. |
+| `npm run build` in `sdk/typescript/` | Passed. TypeScript SDK compiled successfully. |
+| `npm audit` in `lambda/` | Passed with 0 vulnerabilities. |
+| `npm audit` in `sdk/typescript/` | Passed with 0 vulnerabilities. |
+| `terraform fmt -recursive` | Passed. Reformatted Terraform files. |
+| `terraform init -backend=false` in `terraform/` | Passed. Reused locked AWS provider. |
+| `terraform validate` in `terraform/` | Passed. Terraform reported the configuration is valid. |
+| `git diff --check` | Passed. |

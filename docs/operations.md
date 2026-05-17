@@ -2,7 +2,7 @@
 
 ## Create an API Key
 
-Set the deployed API base URL and admin token:
+Set the deployed API base URL and admin token. Terraform stores `admin_token` in Secrets Manager unless you provide `admin_token_secret_arn`.
 
 ```bash
 export API_BASE_URL="$(terraform -chdir=terraform output -raw api_endpoint)"
@@ -39,7 +39,7 @@ curl -X PUT "$UPLOAD_URL" \
   --upload-file ./meeting.mp3
 ```
 
-Start transcription:
+Queue transcription:
 
 ```bash
 curl -sS -X POST "$API_BASE_URL/v1/transcriptions" \
@@ -55,6 +55,35 @@ Poll status:
 ```bash
 curl -sS "$API_BASE_URL/v1/transcriptions/$JOB_ID" -H "x-api-key: $API_KEY"
 ```
+
+Expected lifecycle:
+
+```text
+PENDING_UPLOAD -> QUEUED -> STARTING -> IN_PROGRESS -> COMPLETED
+PENDING_UPLOAD -> QUEUED -> STARTING -> FAILED
+```
+
+## Configure Webhooks
+
+```bash
+curl -sS -X POST "$API_BASE_URL/v1/webhooks" \
+  -H "x-api-key: $API_KEY" \
+  -H "content-type: application/json" \
+  -d '{"url":"https://example.com/webhooks/super-transcriber","events":["transcription.completed","transcription.failed"],"enabled":true}'
+```
+
+Webhook deliveries are SQS-backed and retried. Verify the `x-super-transcriber-signature` header by computing `HMAC-SHA256` over `{timestamp}.{payload}` with the returned signing secret.
+
+## Enable Optional AI Enrichment
+
+Set these Terraform variables:
+
+```hcl
+enable_ai_enrichment = true
+bedrock_model_id     = "anthropic.claude-3-haiku-20240307-v1:0"
+```
+
+When enabled, the completion handler enqueues an enrichment job after successful transcription. The enrichment Lambda reads the transcript JSON, calls Amazon Bedrock, writes enrichment JSON to the transcript bucket, and `GET /v1/transcriptions/{jobId}` returns `enrichmentJsonUrl` after the enrichment record exists.
 
 ## Inspect Lambda Logs
 
@@ -117,6 +146,14 @@ aws sqs get-queue-attributes \
 
 If `enable_cloudwatch_alarms=true`, Terraform also creates an alarm for visible DLQ messages.
 
+Additional queue DLQs:
+
+```bash
+terraform -chdir=terraform output -raw transcription_start_dlq_url
+terraform -chdir=terraform output -raw webhook_delivery_dlq_url
+terraform -chdir=terraform output -raw enrichment_dlq_url
+```
+
 ## Common Failures
 
 `Invalid API key`: confirm the request uses `x-api-key` or `Authorization: Bearer`, the key has the `stapi_` format, and the key was created by `POST /v1/api-keys`.
@@ -125,9 +162,15 @@ If `enable_cloudwatch_alarms=true`, Terraform also creates an alarm for visible 
 
 `S3 URI not accessible`: the `s3Key` must start with `customers/{customerId}/uploads/`, the object must exist in the uploads bucket, and the upload must have completed before starting the job.
 
+`Job stuck in QUEUED or STARTING`: inspect the `start-transcription` Lambda logs and the `transcription_start_dlq_url` queue.
+
 `Transcribe not enabled`: confirm Amazon Transcribe is available in the selected region and the account is allowed to use it.
 
 `Transcribe output missing`: inspect the Transcribe job in AWS, confirm the transcript bucket policy allows the Transcribe service principal to write output, and check the completion Lambda logs.
+
+`Webhook not delivered`: inspect the `deliver-webhook` Lambda logs and `webhook_delivery_dlq_url`.
+
+`AI enrichment missing`: confirm `enable_ai_enrichment=true`, Bedrock model access is enabled in the AWS account, and `enrichment_dlq_url` is empty.
 
 ## Cost Guardrails
 
@@ -135,5 +178,6 @@ If `enable_cloudwatch_alarms=true`, Terraform also creates an alarm for visible 
 - Keep lifecycle retention short for uploads and transcripts.
 - Leave `enable_cloudwatch_alarms=false` unless alarm costs are acceptable.
 - Use API Gateway stage throttling for coarse request control.
+- Keep optional Bedrock enrichment disabled unless the deployment needs LLM outputs.
 - HTTP API does not use REST API usage plans in this stack. Per-key limits are enforced by Lambda and DynamoDB usage counters.
 - Avoid enabling VPC attachment, NAT Gateway, provisioned capacity, or fixed monthly services.

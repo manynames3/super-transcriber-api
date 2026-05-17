@@ -6,6 +6,9 @@ locals {
     "POST /v1/api-keys" = {
       lambda_key = "create-api-key"
     }
+    "POST /v1/webhooks" = {
+      lambda_key = "configure-webhook"
+    }
     "POST /v1/uploads/presign" = {
       lambda_key = "presign-upload"
     }
@@ -67,11 +70,11 @@ resource "aws_apigatewayv2_stage" "default" {
 }
 
 resource "aws_lambda_permission" "api_gateway" {
-  for_each = aws_lambda_function.handlers
+  for_each = toset(distinct([for route in local.http_routes : route.lambda_key]))
 
   statement_id  = "AllowHttpApiInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = each.value.function_name
+  function_name = aws_lambda_function.handlers[each.value].function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }

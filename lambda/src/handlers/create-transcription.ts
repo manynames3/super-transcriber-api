@@ -2,19 +2,15 @@ import { HeadObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
 import { authenticate } from "../shared/auth.js";
 import {
-  customerPk,
-  jobSk,
+  getJob,
   markJobFailed,
-  nowIso,
-  putJobAndMapping,
+  markJobQueued,
   releaseUsageReservation,
-  reserveUsageCapacity,
-  type JobRecord,
-  type TranscribeMappingRecord
+  reserveUsageCapacity
 } from "../shared/dynamodb.js";
-import { badRequest, conflict, internalError, notImplemented, upstreamFailure } from "../shared/errors.js";
-import { errorResponse, jsonResponse, logError, logInfo } from "../shared/response.js";
-import { startTranscribeJob } from "../shared/transcribe.js";
+import { badRequest, conflict, internalError, notFound, notImplemented } from "../shared/errors.js";
+import { enqueueTranscriptionStart } from "../shared/queue.js";
+import { errorResponse, jsonResponse, logInfo } from "../shared/response.js";
 import {
   assertFileSize,
   monthKey,
@@ -57,76 +53,41 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     const fileName = input.fileName ?? upload.fileName;
     await assertObjectIsUsable(s3Key, auth.limits.maxFileSizeBytes);
 
+    const existingJob = await getJob(auth.customerId, upload.jobId);
+    if (!existingJob || existingJob.deleted) {
+      throw notFound("Upload reservation not found");
+    }
+    if (existingJob.status !== "PENDING_UPLOAD") {
+      throw conflict(`Transcription job is already ${existingJob.status}`, "JOB_NOT_PENDING_UPLOAD");
+    }
+
     const jobId = upload.jobId;
     const usageMonth = monthKey();
     const reservedSeconds = reservedDurationSeconds(input.durationSeconds, auth.limits.maxDurationSeconds);
     await reserveUsageCapacity(auth.customerId, usageMonth, reservedSeconds, auth.limits);
     reservation = { customerId: auth.customerId, usageMonth, reservedSeconds, jobId };
 
-    const now = nowIso();
-    const transcribeJobName = `st-${auth.customerId}-${jobId}`;
-    const transcriptJsonS3Key = `customers/${auth.customerId}/transcripts/${jobId}.json`;
-    const job: JobRecord = {
-      PK: customerPk(auth.customerId),
-      SK: jobSk(jobId),
-      GSI2PK: `JOBS#${auth.customerId}`,
-      GSI2SK: `${now}#${jobId}`,
-      recordType: "JOB",
-      jobId,
-      customerId: auth.customerId,
-      status: "IN_PROGRESS",
-      s3Key,
-      fileName,
+    await markJobQueued(auth.customerId, jobId, {
       durationSeconds: input.durationSeconds ?? null,
       reservedDurationSeconds: reservedSeconds,
-      wordCount: 0,
-      failureReason: null,
-      deleted: false,
-      transcribeJobName,
-      transcriptJsonS3Key,
-      usageMonth,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    const mapping: TranscribeMappingRecord = {
-      PK: `TRANSCRIBE#${transcribeJobName}`,
-      SK: "JOB",
-      recordType: "TRANSCRIBE_JOB",
-      customerId: auth.customerId,
-      jobId,
-      transcribeJobName,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    await putJobAndMapping(job, mapping);
+      speakerCount: input.speakerCount ?? null,
+      usageMonth
+    });
 
     try {
-      await startTranscribeJob({
+      await enqueueTranscriptionStart({
         customerId: auth.customerId,
-        jobId,
-        transcribeJobName,
-        s3Key,
-        fileName,
-        speakerCount: input.speakerCount,
-        transcriptJsonS3Key
+        jobId
       });
     } catch (error) {
-      const failureReason = error instanceof Error ? error.message : "Failed to start Amazon Transcribe job";
+      const failureReason = error instanceof Error ? error.message : "Failed to queue transcription job";
       await markJobFailed(auth.customerId, jobId, failureReason);
       await releaseUsageReservation(auth.customerId, usageMonth, reservedSeconds);
       reservation = undefined;
-      logError("transcribe_start_failed", {
-        requestId: event.requestContext.requestId,
-        customerId: auth.customerId,
-        route: "POST /v1/transcriptions",
-        jobId
-      });
-      throw upstreamFailure("Amazon Transcribe could not start the job");
+      throw error;
     }
 
-    logInfo("transcription_started", {
+    logInfo("transcription_queued", {
       requestId: event.requestContext.requestId,
       customerId: auth.customerId,
       route: "POST /v1/transcriptions",
@@ -135,7 +96,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
     return jsonResponse(202, {
       jobId,
-      status: "IN_PROGRESS",
+      status: "QUEUED",
       pollUrl: `/v1/transcriptions/${jobId}`,
       links: {
         self: `/v1/transcriptions/${jobId}`
@@ -145,8 +106,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     if (reservation) {
       await releaseUsageReservation(reservation.customerId, reservation.usageMonth, reservation.reservedSeconds);
     }
-    if (error instanceof Error && error.name === "TransactionCanceledException") {
-      return errorResponse(conflict("Transcription job already exists for this upload", "JOB_ALREADY_EXISTS"));
+    if (error instanceof Error && (error.name === "TransactionCanceledException" || error.name === "ConditionalCheckFailedException")) {
+      return errorResponse(conflict("Transcription job is not ready to be queued", "JOB_NOT_PENDING_UPLOAD"));
     }
     return errorResponse(error);
   }

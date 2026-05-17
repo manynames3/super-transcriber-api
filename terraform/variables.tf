@@ -18,8 +18,14 @@ variable "aws_region" {
 
 variable "admin_token" {
   type        = string
-  description = "Bearer token for POST /v1/api-keys. Leave empty to disable the admin route."
+  description = "Admin token to store in Secrets Manager for POST /v1/api-keys. Prefer admin_token_secret_arn for shared environments."
   sensitive   = true
+  default     = ""
+}
+
+variable "admin_token_secret_arn" {
+  type        = string
+  description = "Existing Secrets Manager ARN containing the admin token. If set, Terraform does not create an admin token secret."
   default     = ""
 }
 
@@ -141,6 +147,48 @@ variable "lambda_reserved_concurrency" {
   type        = number
   description = "Reserved concurrency per Lambda. Use -1 for unreserved account concurrency."
   default     = -1
+}
+
+variable "transcription_start_max_receive_count" {
+  type        = number
+  description = "Maximum SQS receive attempts before a queued transcription start is marked failed."
+  default     = 3
+}
+
+variable "webhook_max_receive_count" {
+  type        = number
+  description = "Maximum SQS receive attempts before webhook delivery moves to DLQ."
+  default     = 5
+}
+
+variable "webhook_timeout_ms" {
+  type        = number
+  description = "Webhook HTTP request timeout in milliseconds."
+  default     = 10000
+}
+
+variable "enable_ai_enrichment" {
+  type        = bool
+  description = "Enable optional Bedrock-powered transcript enrichment after completion."
+  default     = false
+}
+
+variable "bedrock_model_id" {
+  type        = string
+  description = "Bedrock model id used for optional AI enrichment."
+  default     = "anthropic.claude-3-haiku-20240307-v1:0"
+}
+
+variable "ai_enrichment_max_chars" {
+  type        = number
+  description = "Maximum transcript characters sent to the optional enrichment model."
+  default     = 12000
+}
+
+variable "ai_enrichment_max_tokens" {
+  type        = number
+  description = "Maximum output tokens requested from the optional enrichment model."
+  default     = 1200
 }
 
 variable "stripe_secret_arn" {

@@ -10,7 +10,7 @@ import {
 import { notFound, quotaExceeded } from "./errors.js";
 import type { LimitConfig } from "./validation.js";
 
-export type JobStatus = "IN_PROGRESS" | "COMPLETED" | "FAILED";
+export type JobStatus = "PENDING_UPLOAD" | "QUEUED" | "STARTING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
 
 export interface ApiKeyRecord {
   PK: string;
@@ -51,6 +51,7 @@ export interface JobRecord {
   s3Key: string;
   fileName: string;
   durationSeconds: number | null;
+  speakerCount: number | null;
   reservedDurationSeconds: number;
   wordCount: number;
   failureReason: string | null;
@@ -58,6 +59,32 @@ export interface JobRecord {
   transcribeJobName: string;
   transcriptJsonS3Key: string;
   usageMonth: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebhookRecord {
+  PK: string;
+  SK: "WEBHOOK#default";
+  recordType: "WEBHOOK";
+  customerId: string;
+  url: string;
+  signingSecret: string;
+  events: Array<"transcription.completed" | "transcription.failed">;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnrichmentRecord {
+  PK: string;
+  SK: string;
+  recordType: "ENRICHMENT";
+  customerId: string;
+  jobId: string;
+  status: "COMPLETED" | "FAILED";
+  s3Key: string | null;
+  failureReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -160,6 +187,42 @@ export async function putJobAndMapping(job: JobRecord, mapping: TranscribeMappin
   );
 }
 
+export async function markJobQueued(
+  customerId: string,
+  jobId: string,
+  fields: {
+    durationSeconds: number | null;
+    reservedDurationSeconds: number;
+    speakerCount: number | null;
+    usageMonth: string;
+  }
+): Promise<void> {
+  await client.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: {
+        PK: customerPk(customerId),
+        SK: jobSk(jobId)
+      },
+      UpdateExpression:
+        "SET #status = :queued, durationSeconds = :durationSeconds, reservedDurationSeconds = :reservedDurationSeconds, speakerCount = :speakerCount, usageMonth = :usageMonth, updatedAt = :updatedAt",
+      ConditionExpression: "attribute_exists(PK) AND #status = :pending",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":queued": "QUEUED",
+        ":pending": "PENDING_UPLOAD",
+        ":durationSeconds": fields.durationSeconds,
+        ":reservedDurationSeconds": fields.reservedDurationSeconds,
+        ":speakerCount": fields.speakerCount,
+        ":usageMonth": fields.usageMonth,
+        ":updatedAt": nowIso()
+      }
+    })
+  );
+}
+
 export async function getJob(customerId: string, jobId: string): Promise<JobRecord | null> {
   const result = await client.send(
     new GetCommand({
@@ -242,7 +305,38 @@ export async function softDeleteJob(customerId: string, jobId: string): Promise<
   );
 }
 
-export async function markJobCompleted(customerId: string, jobId: string, wordCount: number): Promise<void> {
+export async function markJobStarting(customerId: string, jobId: string): Promise<boolean> {
+  const updatedAt = nowIso();
+  try {
+    await client.send(
+      new UpdateCommand({
+        TableName: tableName,
+        Key: {
+          PK: customerPk(customerId),
+          SK: jobSk(jobId)
+        },
+        UpdateExpression: "SET #status = :starting, updatedAt = :updatedAt",
+        ConditionExpression: "attribute_exists(PK) AND (#status = :queued OR #status = :starting)",
+        ExpressionAttributeNames: {
+          "#status": "status"
+        },
+        ExpressionAttributeValues: {
+          ":starting": "STARTING",
+          ":queued": "QUEUED",
+          ":updatedAt": updatedAt
+        }
+      })
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export async function markJobInProgress(customerId: string, jobId: string): Promise<void> {
   const updatedAt = nowIso();
   await client.send(
     new UpdateCommand({
@@ -251,40 +345,133 @@ export async function markJobCompleted(customerId: string, jobId: string, wordCo
         PK: customerPk(customerId),
         SK: jobSk(jobId)
       },
-      UpdateExpression: "SET #status = :status, wordCount = :wordCount, failureReason = :failureReason, updatedAt = :updatedAt",
+      UpdateExpression: "SET #status = :status, updatedAt = :updatedAt",
+      ConditionExpression: "attribute_exists(PK) AND (#status = :starting OR #status = :queued OR #status = :inProgress)",
       ExpressionAttributeNames: {
         "#status": "status"
       },
       ExpressionAttributeValues: {
-        ":status": "COMPLETED",
-        ":wordCount": wordCount,
-        ":failureReason": null,
+        ":status": "IN_PROGRESS",
+        ":starting": "STARTING",
+        ":queued": "QUEUED",
+        ":inProgress": "IN_PROGRESS",
         ":updatedAt": updatedAt
       }
     })
   );
 }
 
-export async function markJobFailed(customerId: string, jobId: string, failureReason: string): Promise<void> {
+export async function markJobCompleted(customerId: string, jobId: string, wordCount: number): Promise<boolean> {
   const updatedAt = nowIso();
+  try {
+    await client.send(
+      new UpdateCommand({
+        TableName: tableName,
+        Key: {
+          PK: customerPk(customerId),
+          SK: jobSk(jobId)
+        },
+        UpdateExpression: "SET #status = :status, wordCount = :wordCount, failureReason = :failureReason, updatedAt = :updatedAt",
+        ConditionExpression: "attribute_exists(PK) AND #status <> :completed AND #status <> :failed",
+        ExpressionAttributeNames: {
+          "#status": "status"
+        },
+        ExpressionAttributeValues: {
+          ":status": "COMPLETED",
+          ":completed": "COMPLETED",
+          ":failed": "FAILED",
+          ":wordCount": wordCount,
+          ":failureReason": null,
+          ":updatedAt": updatedAt
+        }
+      })
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export async function markJobFailed(customerId: string, jobId: string, failureReason: string): Promise<boolean> {
+  const updatedAt = nowIso();
+  try {
+    await client.send(
+      new UpdateCommand({
+        TableName: tableName,
+        Key: {
+          PK: customerPk(customerId),
+          SK: jobSk(jobId)
+        },
+        UpdateExpression: "SET #status = :status, failureReason = :failureReason, updatedAt = :updatedAt",
+        ConditionExpression: "attribute_exists(PK) AND #status <> :completed AND #status <> :failed",
+        ExpressionAttributeNames: {
+          "#status": "status"
+        },
+        ExpressionAttributeValues: {
+          ":status": "FAILED",
+          ":completed": "COMPLETED",
+          ":failed": "FAILED",
+          ":failureReason": failureReason,
+          ":updatedAt": updatedAt
+        }
+      })
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof ConditionalCheckFailedException) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export async function putWebhook(record: WebhookRecord): Promise<void> {
   await client.send(
-    new UpdateCommand({
+    new PutCommand({
+      TableName: tableName,
+      Item: record
+    })
+  );
+}
+
+export async function getWebhook(customerId: string): Promise<WebhookRecord | null> {
+  const result = await client.send(
+    new GetCommand({
       TableName: tableName,
       Key: {
         PK: customerPk(customerId),
-        SK: jobSk(jobId)
-      },
-      UpdateExpression: "SET #status = :status, failureReason = :failureReason, updatedAt = :updatedAt",
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
-      ExpressionAttributeValues: {
-        ":status": "FAILED",
-        ":failureReason": failureReason,
-        ":updatedAt": updatedAt
+        SK: "WEBHOOK#default"
       }
     })
   );
+
+  return (result.Item as WebhookRecord | undefined) ?? null;
+}
+
+export async function putEnrichmentRecord(record: EnrichmentRecord): Promise<void> {
+  await client.send(
+    new PutCommand({
+      TableName: tableName,
+      Item: record
+    })
+  );
+}
+
+export async function getEnrichmentRecord(customerId: string, jobId: string): Promise<EnrichmentRecord | null> {
+  const result = await client.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: {
+        PK: customerPk(customerId),
+        SK: `ENRICHMENT#${jobId}`
+      }
+    })
+  );
+
+  return (result.Item as EnrichmentRecord | undefined) ?? null;
 }
 
 export async function reserveUsageCapacity(

@@ -7,6 +7,7 @@ import {
   markJobCompleted,
   markJobFailed
 } from "../shared/dynamodb.js";
+import { enqueueEnrichment, enqueueWebhookDelivery } from "../shared/queue.js";
 import { logInfo, logWarn } from "../shared/response.js";
 import { getTranscribeJobStatus } from "../shared/transcribe.js";
 import { summarizeTranscript } from "../shared/transcript-format.js";
@@ -53,8 +54,19 @@ export async function handler(event: EventBridgeEvent<"Transcribe Job State Chan
 
     const payload = await readJsonObject(transcriptBucket, job.transcriptJsonS3Key);
     const summary = summarizeTranscript(payload);
-    await markJobCompleted(mapping.customerId, mapping.jobId, summary.wordCount);
-    await closeActiveUsage(mapping.customerId, job.usageMonth, true);
+    const transitioned = await markJobCompleted(mapping.customerId, mapping.jobId, summary.wordCount);
+    if (transitioned) {
+      await closeActiveUsage(mapping.customerId, job.usageMonth, true);
+      await enqueueWebhookDelivery({
+        customerId: mapping.customerId,
+        jobId: mapping.jobId,
+        eventType: "transcription.completed"
+      });
+      await enqueueEnrichment({
+        customerId: mapping.customerId,
+        jobId: mapping.jobId
+      });
+    }
     logInfo("transcription_completed", {
       eventId: event.id,
       customerId: mapping.customerId,
@@ -67,8 +79,15 @@ export async function handler(event: EventBridgeEvent<"Transcribe Job State Chan
   if (status === "FAILED") {
     const fallbackStatus = await getTranscribeJobStatus(transcribeJobName);
     const reason = event.detail.FailureReason ?? fallbackStatus.failureReason ?? "Amazon Transcribe reported failure";
-    await markJobFailed(mapping.customerId, mapping.jobId, reason);
-    await closeActiveUsage(mapping.customerId, job.usageMonth, false);
+    const transitioned = await markJobFailed(mapping.customerId, mapping.jobId, reason);
+    if (transitioned) {
+      await closeActiveUsage(mapping.customerId, job.usageMonth, false);
+      await enqueueWebhookDelivery({
+        customerId: mapping.customerId,
+        jobId: mapping.jobId,
+        eventType: "transcription.failed"
+      });
+    }
     logInfo("transcription_failed", {
       eventId: event.id,
       customerId: mapping.customerId,

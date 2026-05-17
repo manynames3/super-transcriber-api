@@ -8,6 +8,7 @@ import {
   encodeCursor,
   parseOwnedUploadS3Key,
   validateCreateTranscriptionRequest,
+  validateConfigureWebhookRequest,
   validateUploadRequest,
   type LimitConfig
 } from "../shared/validation.js";
@@ -115,5 +116,21 @@ describe("request validation", () => {
   it("round-trips pagination cursors", () => {
     const cursor = { PK: "CUSTOMER#c", SK: "JOB#j" };
     expect(decodeCursor(encodeCursor(cursor))).toEqual(cursor);
+  });
+
+  it("validates webhook configuration", () => {
+    expect(
+      validateConfigureWebhookRequest({
+        url: "https://example.com/webhooks/super-transcriber",
+        events: ["transcription.completed"],
+        enabled: true
+      })
+    ).toEqual({
+      url: "https://example.com/webhooks/super-transcriber",
+      events: ["transcription.completed"],
+      enabled: true
+    });
+
+    expect(() => validateConfigureWebhookRequest({ url: "http://example.com/webhook" })).toThrow(/https/);
   });
 });

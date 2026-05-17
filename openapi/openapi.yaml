@@ -1,0 +1,246 @@
+openapi: 3.1.0
+info:
+  title: Super Transcriber API
+  version: 0.2.0
+  description: API-first transcription backend for private S3 uploads, asynchronous jobs, webhooks, and optional AI enrichment.
+servers:
+  - url: https://api.example.com
+security:
+  - ApiKeyAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: Health check
+      responses:
+        "200":
+          description: Service health
+  /v1/api-keys:
+    post:
+      security:
+        - AdminTokenAuth: []
+      summary: Create an API key
+      responses:
+        "201":
+          description: Created API key. Plaintext key is returned once.
+  /v1/uploads/presign:
+    post:
+      summary: Create a private S3 upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignUploadRequest"
+      responses:
+        "200":
+          description: Presigned upload URL and next-step links
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignUploadResponse"
+  /v1/transcriptions:
+    post:
+      summary: Queue an asynchronous transcription job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTranscriptionRequest"
+      responses:
+        "202":
+          description: Job queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateTranscriptionResponse"
+    get:
+      summary: List recent transcription jobs
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated job list
+  /v1/transcriptions/{jobId}:
+    get:
+      summary: Get transcription status and transcript output
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job status and transcript when complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptionJob"
+    delete:
+      summary: Soft delete a transcription job
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "204":
+          description: Job soft deleted
+  /v1/webhooks:
+    post:
+      summary: Configure the default completion webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfigureWebhookRequest"
+      responses:
+        "200":
+          description: Webhook configuration. Signing secret is returned only when first created.
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    AdminTokenAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    JobStatus:
+      type: string
+      enum:
+        - PENDING_UPLOAD
+        - QUEUED
+        - STARTING
+        - IN_PROGRESS
+        - COMPLETED
+        - FAILED
+    PresignUploadRequest:
+      type: object
+      required: [fileName, contentType, fileSizeBytes]
+      properties:
+        fileName:
+          type: string
+          examples: [meeting.mp3]
+        contentType:
+          type: string
+          examples: [audio/mpeg]
+        fileSizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 209715200
+    PresignUploadResponse:
+      type: object
+      required: [uploadUrl, uploadMethod, uploadHeaders, jobId, s3Key, expiresInSeconds]
+      properties:
+        uploadUrl:
+          type: string
+        uploadMethod:
+          type: string
+          const: PUT
+        uploadHeaders:
+          type: object
+          additionalProperties:
+            type: string
+        jobId:
+          type: string
+          format: uuid
+        s3Key:
+          type: string
+        expiresInSeconds:
+          type: integer
+        startRequest:
+          $ref: "#/components/schemas/CreateTranscriptionRequest"
+    CreateTranscriptionRequest:
+      type: object
+      properties:
+        s3Key:
+          type: string
+        sourceUrl:
+          type: string
+        fileName:
+          type: string
+        durationSeconds:
+          type: integer
+          minimum: 1
+          maximum: 1200
+        speakerCount:
+          type: integer
+          minimum: 1
+          maximum: 10
+      oneOf:
+        - required: [s3Key]
+        - required: [sourceUrl]
+    CreateTranscriptionResponse:
+      type: object
+      required: [jobId, status, pollUrl]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: QUEUED
+        pollUrl:
+          type: string
+    TranscriptionJob:
+      type: object
+      required: [jobId, status, fileName, wordCount, createdAt, updatedAt]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        fileName:
+          type: string
+        durationSeconds:
+          type:
+            - integer
+            - "null"
+        wordCount:
+          type: integer
+        failureReason:
+          type:
+            - string
+            - "null"
+        transcriptText:
+          type: string
+        transcriptJsonUrl:
+          type: string
+        enrichmentJsonUrl:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ConfigureWebhookRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum: [transcription.completed, transcription.failed]
+        enabled:
+          type: boolean

@@ -3,9 +3,10 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
 import { authenticate } from "../shared/auth.js";
+import { customerPk, jobSk, nowIso, putJobAndMapping, type JobRecord, type TranscribeMappingRecord } from "../shared/dynamodb.js";
 import { internalError } from "../shared/errors.js";
 import { errorResponse, jsonResponse, logInfo } from "../shared/response.js";
-import { parseJsonBody, validateUploadRequest } from "../shared/validation.js";
+import { monthKey, parseJsonBody, validateUploadRequest } from "../shared/validation.js";
 
 const s3 = new S3Client({});
 
@@ -21,6 +22,44 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     const jobId = randomUUID();
     const expiresInSeconds = Number(process.env.UPLOAD_PRESIGN_SECONDS ?? "900");
     const s3Key = `customers/${auth.customerId}/uploads/${jobId}/${input.fileName}`;
+    const now = nowIso();
+    const transcribeJobName = `st-${auth.customerId}-${jobId}`;
+    const transcriptJsonS3Key = `customers/${auth.customerId}/transcripts/${jobId}.json`;
+    const job: JobRecord = {
+      PK: customerPk(auth.customerId),
+      SK: jobSk(jobId),
+      GSI2PK: `JOBS#${auth.customerId}`,
+      GSI2SK: `${now}#${jobId}`,
+      recordType: "JOB",
+      jobId,
+      customerId: auth.customerId,
+      status: "PENDING_UPLOAD",
+      s3Key,
+      fileName: input.fileName,
+      durationSeconds: null,
+      speakerCount: null,
+      reservedDurationSeconds: 0,
+      wordCount: 0,
+      failureReason: null,
+      deleted: false,
+      transcribeJobName,
+      transcriptJsonS3Key,
+      usageMonth: monthKey(),
+      createdAt: now,
+      updatedAt: now
+    };
+    const mapping: TranscribeMappingRecord = {
+      PK: `TRANSCRIBE#${transcribeJobName}`,
+      SK: "JOB",
+      recordType: "TRANSCRIBE_JOB",
+      customerId: auth.customerId,
+      jobId,
+      transcribeJobName,
+      createdAt: now,
+      updatedAt: now
+    };
+    await putJobAndMapping(job, mapping);
+
     const uploadUrl = await getSignedUrl(
       s3,
       new PutObjectCommand({

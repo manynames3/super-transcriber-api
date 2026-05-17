@@ -27,7 +27,7 @@ Response:
 
 ## POST /v1/api-keys
 
-Admin-only route protected by `ADMIN_TOKEN` through `Authorization: Bearer` or `x-admin-token`.
+Admin-only route protected by the Secrets Manager-backed admin token through `Authorization: Bearer` or `x-admin-token`.
 
 Request:
 
@@ -98,7 +98,7 @@ The returned `jobId` is reserved from the upload path and is reused as the trans
 
 ## POST /v1/transcriptions
 
-Starts an asynchronous transcription job from an owned S3 key.
+Queues an asynchronous transcription job from an owned S3 key. The API writes `QUEUED`, sends a durable SQS message, and a worker Lambda starts Amazon Transcribe.
 
 Request with S3 key:
 
@@ -115,7 +115,7 @@ Response:
 ```json
 {
   "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
-  "status": "IN_PROGRESS",
+  "status": "QUEUED",
   "pollUrl": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
   "links": {
     "self": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821"
@@ -146,7 +146,7 @@ Response:
 
 ## GET /v1/transcriptions/{jobId}
 
-Returns job status. Completed jobs include `transcriptText` and a short-lived private `transcriptJsonUrl`.
+Returns job status. Valid statuses are `PENDING_UPLOAD`, `QUEUED`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, and `FAILED`. Completed jobs include `transcriptText`, a short-lived private `transcriptJsonUrl`, and `enrichmentJsonUrl` when optional AI enrichment has completed.
 
 In-progress response:
 
@@ -180,6 +180,7 @@ Completed response:
   "updatedAt": "2026-05-16T17:35:22.000Z",
   "transcriptText": "Speaker 1 started the meeting...",
   "transcriptJsonUrl": "https://bucket.s3.amazonaws.com/customers/cust_123/transcripts/job.json?...",
+  "enrichmentJsonUrl": "https://bucket.s3.amazonaws.com/customers/cust_123/enrichments/job.json?...",
   "links": {
     "self": "/v1/transcriptions/2d1d7a53-9f34-40d3-9d2a-839bfb29d821"
   }
@@ -225,3 +226,48 @@ Response:
 Soft deletes a job. It does not delete uploaded audio, transcript JSON, or cancel an already-started Transcribe job.
 
 Response: `204 No Content`
+
+## POST /v1/webhooks
+
+Configures the authenticated customer's default completion webhook. Payloads are signed with `x-super-transcriber-signature` using `HMAC-SHA256` over `{timestamp}.{payload}`. The signing secret is returned only when the webhook is first created.
+
+Request:
+
+```json
+{
+  "url": "https://example.com/webhooks/super-transcriber",
+  "events": ["transcription.completed", "transcription.failed"],
+  "enabled": true
+}
+```
+
+Response:
+
+```json
+{
+  "url": "https://example.com/webhooks/super-transcriber",
+  "events": ["transcription.completed", "transcription.failed"],
+  "enabled": true,
+  "signingSecret": "whsec_returned_once_for_new_webhooks"
+}
+```
+
+Example webhook payload:
+
+```json
+{
+  "id": "4c94c9e8-9cb2-4b9d-9b3b-63d3eb5a935a",
+  "type": "transcription.completed",
+  "createdAt": "2026-05-16T17:35:22.000Z",
+  "data": {
+    "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
+    "status": "COMPLETED",
+    "fileName": "meeting.mp3",
+    "durationSeconds": 600,
+    "wordCount": 421,
+    "failureReason": null,
+    "createdAt": "2026-05-16T17:30:00.000Z",
+    "updatedAt": "2026-05-16T17:35:22.000Z"
+  }
+}
+```
