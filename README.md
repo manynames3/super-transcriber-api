@@ -1,40 +1,56 @@
 # Super Transcriber API
 
-Super Transcriber API is a developer-facing, privacy-conscious transcription backend for teams that want a clean REST API on a cost-first AWS serverless stack. It accepts private S3 uploads, queues durable asynchronous Amazon Transcribe jobs, records status and usage in DynamoDB, and can be deployed as a hosted API or into a customer-owned AWS account with the same Terraform.
+Super Transcriber API is a developer-facing transcription backend that turns the original Super Transcriber upload-and-transcribe workflow into a ready-to-integrate REST API. It uses TypeScript, Terraform, and AWS serverless services to accept private audio uploads, queue asynchronous Amazon Transcribe jobs, enforce customer usage limits, deliver transcripts by polling or webhook, and support optional Stripe-based monetization without fixed monthly application servers.
 
-## Product Lineage
+## Live Links
 
-This API-first version was developed from the original Super Transcriber, an end-user-facing transcription web app. The goal of this repository is to package the core transcription workflow as a ready-to-integrate backend for developers, teams, and organizations that want to embed transcription into an existing product, internal system, or AWS-native tech stack.
+- Sales landing page: [https://super-transcriber-api.pages.dev](https://super-transcriber-api.pages.dev)
+- Public API health: [https://pn72sppog0.execute-api.us-east-1.amazonaws.com/health](https://pn72sppog0.execute-api.us-east-1.amazonaws.com/health)
+- Static API reference: [https://super-transcriber-api.pages.dev/api-reference](https://super-transcriber-api.pages.dev/api-reference)
+- OpenAPI contract: [openapi/openapi.yaml](openapi/openapi.yaml)
+- Architecture docs: [docs/architecture.md](docs/architecture.md)
 
-## Sales Landing Page
+![Super Transcriber API platform preview](landing/assets/api-platform-preview.svg)
 
-A static developer-facing sales page is included at `landing/index.html`. It can be opened directly or served from any static host, and it adds no AWS idle cost to the API deployment.
+## About
+
+The original Super Transcriber was a consumer-facing web app for uploading audio and receiving transcripts. This repository packages the same core workflow as an API-first product for developers, internal tools teams, and companies that want transcription inside an existing product or AWS-native system. The hosted path exposes a clean REST API; the private-deployment path lets a customer deploy the same Terraform stack into their own AWS account.
+
+## Tech Stack
+
+| Area | Technology |
+| --- | --- |
+| Runtime | TypeScript, Node.js 20 Lambda, arm64 |
+| API | API Gateway HTTP API, structured JSON errors, API-key auth |
+| Async processing | SQS workers, Amazon Transcribe async jobs, EventBridge completion events |
+| Data | DynamoDB single-table design, S3 private buckets, lifecycle retention |
+| Billing and usage | Optional Stripe Checkout/Billing Portal, DynamoDB usage counters |
+| Optional AI | Amazon Bedrock transcript enrichment, disabled by default |
+| Infrastructure | Terraform only, no CDK, no VPC, no NAT Gateway, no RDS |
+| Frontend/docs | Static Cloudflare Pages landing page and API reference |
+| Quality | Vitest, TypeScript checks, Lambda bundling, Terraform validate, Checkov, CodeQL |
+
+## Engineering Highlights
+
+- Built a cost-first AWS serverless architecture with no always-on app servers, databases, NAT gateways, or VPC networking.
+- Decoupled customer API requests from transcription side effects with SQS-backed workers and explicit job states: `PENDING_UPLOAD`, `QUEUED`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, and `FAILED`.
+- Implemented API-key authentication with SHA-256 hashed secrets, key-id lookup through DynamoDB GSI1, constant-time hash comparison, and no raw API-key logging.
+- Enforced customer ownership and usage limits before starting Transcribe: active jobs, file size, duration, and monthly transcription minutes.
+- Added production-shaped extension points: webhooks with signing secrets, optional Stripe self-serve billing, optional Bedrock enrichment, OpenAPI, and a TypeScript SDK.
+- Managed observability and failure handling through Terraform-created CloudWatch log groups, SQS DLQs, and optional CloudWatch alarms.
 
 ## API Quickstart
 
-The easiest integration path is: presign an upload, PUT the audio file to S3, then queue transcription with the returned `s3Key`. The same `jobId` is used for upload tracking, transcription status, polling, transcript retrieval, optional AI enrichment, and webhook delivery.
-
-Deploy the stack, then set:
+The normal integration path is: create or claim an API key, presign an upload, upload audio to S3, start transcription with the returned `s3Key`, then poll or receive a webhook.
 
 ```bash
-export API_BASE_URL="$(terraform -chdir=terraform output -raw api_endpoint)"
-export ADMIN_TOKEN="replace-with-your-admin-token"
-```
-
-Create an API key. The plaintext key is returned once.
-
-```bash
-curl -sS -X POST "$API_BASE_URL/v1/api-keys" \
-  -H "authorization: Bearer $ADMIN_TOKEN" \
-  -H "content-type: application/json" \
-  -d '{"customerName":"Acme Dev","keyName":"Local dev key"}'
+export API_BASE_URL="https://pn72sppog0.execute-api.us-east-1.amazonaws.com"
+export API_KEY="stapi_example_key"
 ```
 
 Presign an upload.
 
 ```bash
-export API_KEY="stapi_example_key"
-
 curl -sS -X POST "$API_BASE_URL/v1/uploads/presign" \
   -H "x-api-key: $API_KEY" \
   -H "content-type: application/json" \
@@ -55,7 +71,7 @@ Start transcription with the returned `s3Key`.
 curl -sS -X POST "$API_BASE_URL/v1/transcriptions" \
   -H "x-api-key: $API_KEY" \
   -H "content-type: application/json" \
-  -d '{"s3Key":"customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3","durationSeconds":600,"speakerCount":2}'
+  -d '{"s3Key":"customers/cust_123/uploads/job_123/meeting.mp3","fileName":"meeting.mp3","durationSeconds":600,"speakerCount":2}'
 ```
 
 Poll and list jobs.
@@ -63,19 +79,6 @@ Poll and list jobs.
 ```bash
 curl -sS "$API_BASE_URL/v1/transcriptions/$JOB_ID" -H "x-api-key: $API_KEY"
 curl -sS "$API_BASE_URL/v1/transcriptions?limit=20" -H "x-api-key: $API_KEY"
-```
-
-Opening `$API_BASE_URL` directly returns the public API status payload. `GET /health` returns the same health response for uptime checks.
-
-The `jobId` returned from the presign step is the same `jobId` used for transcription status, so clients can create one durable id before the audio upload starts.
-
-Configure a completion webhook.
-
-```bash
-curl -sS -X POST "$API_BASE_URL/v1/webhooks" \
-  -H "x-api-key: $API_KEY" \
-  -H "content-type: application/json" \
-  -d '{"url":"https://example.com/webhooks/super-transcriber","events":["transcription.completed","transcription.failed"]}'
 ```
 
 Use the TypeScript SDK.
@@ -93,64 +96,122 @@ const presign = await client.presignUpload({
   contentType: "audio/mpeg",
   fileSizeBytes: 1048576
 });
+
+await client.uploadFile(presign, audioBlob);
+const job = await client.createTranscription({
+  s3Key: presign.s3Key,
+  fileName: "meeting.mp3",
+  durationSeconds: 600,
+  speakerCount: 2
+});
 ```
 
-Create a paid self-serve checkout session without needing a custom domain.
+Configure a completion webhook.
 
 ```bash
-curl -sS -X POST "$API_BASE_URL/v1/billing/checkout" \
+curl -sS -X POST "$API_BASE_URL/v1/webhooks" \
+  -H "x-api-key: $API_KEY" \
   -H "content-type: application/json" \
-  -d '{"email":"dev@example.com","planId":"starter"}'
+  -d '{"url":"https://example.com/webhooks/super-transcriber","events":["transcription.completed","transcription.failed"]}'
 ```
 
-`successUrl` and `cancelUrl` are optional. If you omit them, the API uses the deployed API Gateway URL as the Stripe redirect target, so the paid flow works before you have a custom domain. After Stripe redirects back, or by using the `checkoutSessionId` and `claimToken` returned by the checkout response, claim the API key once.
+## Architecture
+
+Requests enter through API Gateway HTTP API and route to small Lambda handlers. Private audio uploads go directly to S3 through presigned URLs. Job creation writes DynamoDB records, reserves usage, validates S3 ownership, and sends a durable SQS message. A worker Lambda starts Amazon Transcribe asynchronously. EventBridge receives Transcribe completion events, invokes the completion Lambda, updates DynamoDB, and queues webhook delivery or optional Bedrock enrichment.
+
+See [docs/architecture.md](docs/architecture.md) for the C4-style Mermaid diagram, runtime flow, deployment shape, single-table access patterns, and key constraints. See [docs/adrs](docs/adrs) for the core architecture decisions.
+
+## Deployment Model
+
+The AWS backend is deployed with Terraform from [terraform](terraform). Terraform manages API Gateway, Lambda, IAM, DynamoDB, S3, SQS, EventBridge, CloudWatch log groups, optional alarms, and optional Secrets Manager references for admin and Stripe secrets.
 
 ```bash
-curl -sS -X POST "$API_BASE_URL/v1/billing/claim" \
-  -H "content-type: application/json" \
-  -d '{"checkoutSessionId":"cs_test_...","claimToken":"claim_token_from_success_redirect"}'
+cd lambda
+npm ci
+npm run build
+npm test
+npm run bundle
+
+cd ../terraform
+terraform init
+terraform apply
 ```
 
-## Architecture Summary
-
-Requests enter through API Gateway HTTP API and are routed to small Node.js 20 Lambda handlers on arm64. DynamoDB uses a single-table PAY_PER_REQUEST model for customers, hashed API keys, jobs, Transcribe mappings, webhook config, optional enrichment metadata, and monthly usage counters. S3 stores uploaded audio, transcript JSON, and optional enrichment JSON in private buckets with lifecycle expiration. SQS decouples job submission from Transcribe start, webhook delivery, and optional AI enrichment. Amazon Transcribe runs asynchronous jobs, and EventBridge invokes a completion Lambda when jobs finish or fail.
-
-## AWS Services Used
-
-- API Gateway HTTP API
-- AWS Lambda, Node.js 20, arm64
-- DynamoDB on-demand capacity
-- S3 private buckets
-- Amazon Transcribe asynchronous jobs
-- EventBridge job-state rule
-- SQS queues and dead-letter queues for durable Transcribe start, webhook delivery, AI enrichment, and completion handling
-- CloudWatch Logs with Terraform-managed 14-day retention
-- Optional CloudWatch alarms, disabled by default
-- Optional Amazon Bedrock transcript enrichment, disabled by default
-- Optional Stripe Checkout and Billing Portal, disabled unless Stripe secrets and price ids are configured
+The static sales landing page is deployed separately from [landing](landing) to Cloudflare Pages. It is not required for the AWS API runtime.
 
 ## Cost Controls
 
-- No VPC, NAT Gateway, RDS, OpenSearch, queues with idle workers, or fixed monthly compute.
-- DynamoDB uses PAY_PER_REQUEST.
-- S3 lifecycle rules expire uploads and transcripts.
-- Lambda and API Gateway are request driven.
-- SQS-triggered workers run only while jobs are queued.
-- Stripe and Bedrock paths are request/event driven; they do not add meaningful idle compute cost.
-- A monetized idle deployment is designed to stay under $3/month before traffic: the main predictable cost is Secrets Manager, typically two Stripe secrets plus one optional admin secret.
-- Default limits are 5 active jobs, 200 MB files, 20 minute audio duration, and 120 monthly transcription minutes.
-- Duration is reserved before starting Transcribe. If `durationSeconds` is omitted, the full 20 minute maximum is reserved.
+- No VPC, NAT Gateway, RDS, OpenSearch, provisioned DynamoDB capacity, or fixed monthly compute.
+- Lambda, API Gateway, SQS workers, and optional Bedrock enrichment run only on request or event volume.
+- DynamoDB uses on-demand capacity.
+- S3 buckets are private and use lifecycle expiration for uploads and transcript JSON.
+- Stripe is optional and disabled unless Stripe secret ARNs and price ids are configured.
+- Default free/dev limits are 5 active jobs, 200 MB files, 20 minute audio duration, and 120 monthly transcription minutes.
 
-## Security Model
+## Security And Privacy Model
 
-End-user API keys are generated by the admin route, stored only as SHA-256 hashes, and looked up through a key id GSI rather than table scans. The API accepts `x-api-key` or `Authorization: Bearer`. The admin token is read from AWS Secrets Manager when configured through Terraform. S3 objects are private, public access is blocked, and upload access is granted only through presigned PUT URLs. Every job and S3 key is validated against the authenticated customer id. Each Lambda has its own IAM role. Webhook payloads are HMAC-signed. Errors use `{ "success": false, "error": "...", "code": "..." }`, and handlers do not log raw API keys.
+- API keys are returned once, stored only as SHA-256 hashes, and looked up by key id instead of table scans.
+- Customer job access is scoped by `customerId`; handlers validate ownership for jobs and uploaded S3 keys.
+- S3 public access is blocked; customers upload only through presigned PUT URLs.
+- Webhook payloads are HMAC-signed.
+- Errors use structured JSON: `{ "success": false, "error": "...", "code": "..." }`.
+- Each Lambda has its own IAM role, and Terraform manages log groups with retention.
 
-## CI and Deployment Status
+## Local Validation
 
-The active CI workflow installs Lambda and SDK dependencies, runs TypeScript checks, executes Vitest unit tests, audits npm dependencies, bundles Lambda zip files, runs Terraform formatting, initializes Terraform without a backend, validates Terraform, runs a soft-fail Checkov IaC scan, runs GitHub dependency review on PRs, runs CodeQL, and checks whitespace. AWS deployment is not active by default. An optional manual deployment workflow is stored under `.github/examples`.
+```bash
+cd lambda
+npm ci
+npm run build
+npm test
+npm run bundle
 
-## Implemented vs Not Implemented
+cd ../sdk/typescript
+npm ci
+npm run build
 
-Implemented: Stripe Checkout monetization, one-time paid checkout claiming, Billing Portal session creation, API-key creation, hashed API-key auth, presigned S3 uploads, durable SQS-backed transcription starts, explicit job lifecycle states, DynamoDB job storage, cursor pagination, soft deletion, Transcribe completion handling, transcript retrieval, webhook configuration and delivery, optional Bedrock enrichment, usage counters, Terraform infrastructure, per-Lambda IAM roles, OpenAPI contract, TypeScript SDK, unit tests, and CI.
+cd ../../terraform
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
 
-Not implemented in v1: direct `sourceUrl` ingestion. `sourceUrl` returns `501 NOT_IMPLEMENTED`. Stripe remains optional and disabled unless Stripe secrets and price ids are configured.
+cd ..
+git diff --check
+```
+
+## Project Structure
+
+```text
+.
+|-- docs/                  # Architecture, API, operations, validation evidence, ADRs
+|-- landing/               # Static Cloudflare Pages sales site and API reference
+|-- lambda/                # TypeScript Lambda handlers, shared modules, tests, bundler
+|-- openapi/               # OpenAPI 3.1 contract
+|-- sdk/typescript/        # TypeScript API client
+|-- terraform/             # AWS infrastructure as Terraform
+`-- .github/               # CI and optional AWS deployment workflow example
+```
+
+## CI And Deployment Status
+
+The active CI workflow installs Lambda and SDK dependencies, runs TypeScript checks, executes Vitest unit tests, audits npm dependencies, bundles Lambda zip files, runs Terraform formatting, initializes Terraform without a backend, validates Terraform, runs a soft-fail Checkov IaC scan, runs GitHub dependency review on PRs, runs CodeQL, and checks whitespace. AWS deployment is not active by default; an optional manual AWS deployment workflow is stored under [.github/examples](.github/examples).
+
+## Implemented
+
+- API-key creation and hashed API-key authentication
+- Presigned S3 uploads for MP3 and M4A files
+- SQS-backed asynchronous transcription starts
+- Amazon Transcribe speaker diarization
+- DynamoDB job storage, usage counters, and cursor pagination
+- Job polling, transcript retrieval, soft deletion, and completion handling
+- Webhook configuration and delivery
+- Optional Stripe Checkout, billing claim, Billing Portal, and Stripe webhook handling
+- Optional Bedrock transcript enrichment
+- Terraform-managed AWS serverless infrastructure
+- OpenAPI contract, TypeScript SDK, unit tests, CI, and static sales site
+
+## Limitations
+
+- Direct `sourceUrl` ingestion is not implemented in v1; it returns `501 NOT_IMPLEMENTED`.
+- Stripe billing and Bedrock enrichment are disabled unless the required Terraform variables and AWS/Stripe configuration are provided.
+- API Gateway HTTP API does not support REST API usage plans, so this project uses Lambda-side per-customer usage counters and stage throttling.

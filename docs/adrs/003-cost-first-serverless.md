@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Accepted
 
 ## Context
 
@@ -10,7 +10,9 @@ The target product should be inexpensive to run in development and suitable for 
 
 ## Decision
 
-Use only request-driven or storage-metered AWS services: API Gateway HTTP API, Lambda, DynamoDB PAY_PER_REQUEST, S3, Amazon Transcribe, EventBridge, SQS DLQ, and CloudWatch Logs. Do not use VPC, NAT Gateway, RDS, provisioned capacity, always-on workers, or frontend hosting.
+Use request-driven or storage-metered AWS services for the API backend: API Gateway HTTP API, Lambda, DynamoDB PAY_PER_REQUEST, S3, Amazon Transcribe, EventBridge, SQS, and CloudWatch Logs. Do not use VPC, NAT Gateway, RDS, provisioned capacity, OpenSearch, or always-on workers.
+
+Host the public sales page and static API reference on Cloudflare Pages. This is separate from the AWS API runtime and does not change the customer private-deployment path.
 
 ## Consequences
 

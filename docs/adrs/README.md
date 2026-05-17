@@ -1,6 +1,6 @@
-# ADRs
+# Architecture Decision Records
 
-Architecture decision records for Super Transcriber API.
+Concise records for the core architecture decisions in Super Transcriber API.
 
 | ADR | Decision |
 | --- | --- |
@@ -9,4 +9,3 @@ Architecture decision records for Super Transcriber API.
 | [003 Cost-First Serverless](003-cost-first-serverless.md) | Use AWS serverless services without fixed monthly infrastructure |
 | [004 Single-Table DynamoDB](004-single-table-dynamodb.md) | Store customers, keys, jobs, mappings, and usage in one table |
 | [005 Durable Queue Workers](005-durable-queue-workers.md) | Decouple job submission, Transcribe start, webhooks, and enrichment with SQS |
-| [006 Optional Transcript Intelligence](006-optional-transcript-intelligence.md) | Keep Bedrock enrichment optional and event driven |

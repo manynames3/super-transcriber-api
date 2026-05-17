@@ -2,17 +2,17 @@
 
 ## Status
 
-Accepted.
+Accepted
 
 ## Context
 
-The product needs developer-facing API keys without requiring external users to have AWS credentials. Keys must not be stored in plaintext, and lookup must avoid scanning the DynamoDB table.
+The product needs developer-facing API keys without requiring customers to have AWS credentials. Keys must not be stored in plaintext, lookup must avoid scanning the DynamoDB table, and handlers must avoid logging raw credentials.
 
 ## Decision
 
 Generate keys in the format `stapi_{keyId}_{secret}`. Store only the SHA-256 hash, the key id, and a display prefix. Look up keys through GSI1 using `APIKEY#{keyId}`, then compare the presented key hash with a constant-time comparison.
 
-The API accepts `x-api-key` and `Authorization: Bearer`. The admin key-creation route is separately protected by `ADMIN_TOKEN`.
+The API accepts `x-api-key` and `Authorization: Bearer`. The admin key-creation route is separately protected by an admin token, preferably read through Secrets Manager.
 
 ## Consequences
 

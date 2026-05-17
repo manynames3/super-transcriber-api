@@ -1,47 +1,65 @@
 # Architecture
 
-Super Transcriber API is intentionally serverless: API Gateway HTTP API, Lambda, DynamoDB, S3, SQS, Amazon Transcribe, EventBridge, optional Amazon Bedrock, and CloudWatch Logs. Terraform is the only active infrastructure path.
+Super Transcriber API is a cost-first, serverless transcription API. The customer-facing control plane is REST over API Gateway HTTP API. The data plane keeps media private by uploading audio directly to S3 with presigned URLs, then processing transcription asynchronously through SQS, Amazon Transcribe, EventBridge, and Lambda. Terraform is the only active infrastructure-as-code path for the AWS backend. Cloudflare Pages hosts only the static sales page and API reference.
 
-## Container Diagram
+## C4-Style Container Diagram
 
 ```mermaid
-flowchart LR
-  Developer["External developer or team"] -->|REST JSON and API key| Api["API Gateway HTTP API"]
-  Api --> Health["health Lambda"]
-  Api --> Admin["create-api-key Lambda"]
-  Api --> Billing["billing Lambdas"]
-  Api --> Webhooks["configure-webhook Lambda"]
-  Api --> Upload["presign-upload Lambda"]
-  Api --> Jobs["job API Lambdas"]
+flowchart TB
+  Buyer["Developer or company system"]
+  Visitor["Evaluator browser"]
+  Pages["Cloudflare Pages static site<br/>Landing page and API reference"]
 
-  Upload -->|presigned PUT| Uploads["S3 uploads bucket"]
-  Jobs -->|read/write items| Table["DynamoDB single table"]
-  Webhooks --> Table
-  Admin -->|hashed API key records| Table
-  Billing -->|Stripe Checkout and Portal| Stripe["Stripe"]
-  Billing -->|paid sessions and customer status| Table
-  Jobs -->|enqueue start| StartQueue["SQS transcription-start queue"]
-  StartQueue --> StartWorker["start-transcription Lambda"]
-  StartWorker -->|StartTranscriptionJob| Transcribe["Amazon Transcribe"]
-  Transcribe -->|read audio| Uploads
-  Transcribe -->|write JSON| Transcripts["S3 transcripts bucket"]
-  Transcribe -->|job state event| EventBridge["EventBridge rule"]
-  EventBridge --> Completion["completion Lambda"]
-  EventBridge -. failures .-> Dlq["SQS completion DLQ"]
-  Completion --> Table
-  Completion --> Transcripts
-  Completion -->|enqueue| WebhookQueue["SQS webhook queue"]
-  Completion -->|enqueue when enabled| EnrichmentQueue["SQS enrichment queue"]
-  WebhookQueue --> WebhookWorker["deliver-webhook Lambda"]
-  EnrichmentQueue --> EnrichWorker["enrich-transcript Lambda"]
-  EnrichWorker --> Bedrock["Amazon Bedrock"]
-  EnrichWorker --> Transcripts
-  Jobs --> Transcripts
-  Health --> Logs["CloudWatch Logs"]
-  Admin --> Logs
-  Upload --> Logs
-  Jobs --> Logs
-  Completion --> Logs
+  Visitor -->|Reads product docs| Pages
+  Buyer -->|REST JSON + API key| HttpApi["API Gateway HTTP API"]
+  Buyer -->|PUT audio with presigned URL| Uploads
+
+  subgraph AWS["AWS account managed by Terraform"]
+    HttpApi --> Health["Health Lambda"]
+    HttpApi --> Admin["Admin/API-key Lambda"]
+    HttpApi --> Billing["Billing Lambdas"]
+    HttpApi --> WebhookConfig["Webhook config Lambda"]
+    HttpApi --> UploadApi["Presign upload Lambda"]
+    HttpApi --> JobApi["Job API Lambdas"]
+
+    UploadApi -->|Create PENDING_UPLOAD job| Table["DynamoDB single table"]
+    Admin -->|Store hashed API keys| Table
+    Billing -->|Sessions, plan state, limits| Table
+    WebhookConfig -->|Webhook URL and signing secret| Table
+    JobApi -->|Jobs, usage counters, queries| Table
+
+    UploadApi -->|Presign PUT| Uploads["Private S3 uploads bucket"]
+    JobApi -->|HeadObject ownership check| Uploads
+    JobApi -->|Queue start request| StartQueue["SQS transcription-start queue"]
+    StartQueue --> StartWorker["Start-transcription Lambda"]
+    StartWorker -->|StartTranscriptionJob| Transcribe["Amazon Transcribe"]
+    Transcribe -->|Read audio| Uploads
+    Transcribe -->|Write transcript JSON| Transcripts["Private S3 transcripts bucket"]
+    Transcribe -->|Job state event| EventBridge["EventBridge rule"]
+    EventBridge --> Completion["Completion Lambda"]
+    EventBridge -.Target failures.-> CompletionDlq["SQS completion DLQ"]
+    Completion -->|Update status and usage| Table
+    Completion -->|Read transcript JSON| Transcripts
+    Completion -->|Queue delivery| WebhookQueue["SQS webhook queue"]
+    Completion -->|Queue when enabled| EnrichmentQueue["SQS enrichment queue"]
+    WebhookQueue --> WebhookWorker["Deliver-webhook Lambda"]
+    EnrichmentQueue --> EnrichWorker["Enrich-transcript Lambda"]
+    EnrichWorker -->|Optional model call| Bedrock["Amazon Bedrock"]
+    EnrichWorker -->|Write enrichment JSON| Transcripts
+    JobApi -->|Read transcript and presign JSON URL| Transcripts
+    Health --> Logs["CloudWatch Logs"]
+    Admin --> Logs
+    Billing --> Logs
+    UploadApi --> Logs
+    JobApi --> Logs
+    StartWorker --> Logs
+    Completion --> Logs
+    WebhookWorker --> Logs
+    EnrichWorker --> Logs
+  end
+
+  Billing -->|Optional checkout, portal, webhooks| Stripe["Stripe"]
+  WebhookWorker -->|Signed callback| Buyer
 ```
 
 ## Runtime Flow
@@ -49,71 +67,74 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant Client
-  participant API as HTTP API
-  participant Lambda as Lambda handlers
-  participant Stripe
+  participant API as API Gateway HTTP API
+  participant Upload as presign-upload Lambda
   participant DDB as DynamoDB
+  participant S3 as S3 uploads
+  participant Jobs as create-transcription Lambda
   participant Q as SQS start queue
   participant Worker as start-transcription Lambda
-  participant S3 as S3 uploads
   participant TX as Amazon Transcribe
   participant EB as EventBridge
-  participant WQ as SQS webhook/enrichment queues
+  participant Done as completion Lambda
   participant Out as S3 transcripts
+  participant Hook as webhook/enrichment queues
 
   Client->>API: POST /v1/uploads/presign
-  API->>Lambda: presign-upload
-  Lambda->>DDB: query APIKEY by key id
-  Lambda->>DDB: write PENDING_UPLOAD job and mapping
-  Lambda-->>Client: uploadUrl, jobId, s3Key
-  Client->>API: POST /v1/billing/checkout
-  API->>Lambda: create-checkout-session
-  Lambda->>Stripe: create Checkout session
-  Lambda->>DDB: write BILLING_SESSION
-  Stripe->>API: POST /v1/billing/webhook
-  API->>Lambda: stripe-webhook
-  Lambda->>DDB: mark checkout paid
-  Client->>API: POST /v1/billing/claim
-  Lambda->>DDB: create CUSTOMER and hashed API key
-  Client->>S3: PUT audio with presigned URL
+  API->>Upload: Invoke
+  Upload->>DDB: Authenticate API key and write PENDING_UPLOAD job
+  Upload-->>Client: uploadUrl, jobId, s3Key
+  Client->>S3: PUT audio using presigned URL
   Client->>API: POST /v1/transcriptions
-  API->>Lambda: create-transcription
-  Lambda->>DDB: reserve monthly usage and active job
-  Lambda->>S3: HeadObject for ownership and size
-  Lambda->>DDB: update job to QUEUED
-  Lambda->>Q: enqueue start request
-  Lambda-->>Client: 202 jobId, QUEUED
-  Q->>Worker: deliver start request
-  Worker->>DDB: update job to STARTING
+  API->>Jobs: Invoke
+  Jobs->>DDB: Validate owner, reserve usage, set QUEUED
+  Jobs->>S3: HeadObject ownership and size check
+  Jobs->>Q: Send durable start request
+  Jobs-->>Client: 202 jobId, QUEUED
+  Q->>Worker: Deliver message
+  Worker->>DDB: Set STARTING
   Worker->>TX: StartTranscriptionJob with speaker labels
-  Worker->>DDB: update job to IN_PROGRESS
-  TX->>Out: write transcript JSON
+  Worker->>DDB: Set IN_PROGRESS
+  TX->>Out: Write transcript JSON
   TX->>EB: COMPLETED or FAILED event
-  EB->>Lambda: completion handler
-  Lambda->>Out: read transcript JSON on completion
-  Lambda->>DDB: update job and active usage
-  Lambda->>WQ: enqueue webhook and optional enrichment
+  EB->>Done: Invoke completion handler
+  Done->>Out: Read transcript JSON when complete
+  Done->>DDB: Update status, word count, usage counters
+  Done->>Hook: Queue webhook delivery and optional enrichment
   Client->>API: GET /v1/transcriptions/{jobId}
-  API->>Lambda: get-transcription
-  Lambda->>Out: read transcript JSON and presign JSON URL
-  Lambda-->>Client: status and transcriptText
+  API->>DDB: Read owned job
+  API->>Out: Read transcript or presign JSON URL
+  API-->>Client: status, transcriptText, transcriptJsonUrl
 ```
 
-## Single-Table Access Patterns
+## Deployment Shape
+
+- AWS backend: deployed from [terraform](../terraform) into an AWS account with Terraform-managed API Gateway, Lambda, IAM, DynamoDB, S3, SQS, EventBridge, CloudWatch Logs, optional alarms, and optional Secrets Manager references.
+- Static site: deployed from [landing](../landing) to Cloudflare Pages. It hosts marketing content and API reference only; it is not required for transcription processing.
+- CI: GitHub Actions runs Lambda TypeScript checks, Vitest, Lambda bundling, SDK build, Terraform fmt/init/validate, npm audit, Checkov, CodeQL, dependency review, and whitespace checks.
+- Private deployment path: customers can deploy the same Terraform stack into their own AWS account and keep uploaded media, transcripts, DynamoDB records, and logs in their account.
+
+## Single-Table DynamoDB Model
 
 | Record | PK | SK | Purpose |
 | --- | --- | --- | --- |
-| Customer metadata | `CUSTOMER#{customerId}` | `METADATA` | Customer profile |
-| API key | `CUSTOMER#{customerId}` | `APIKEY#{keyId}` | Hashed API key and limits |
-| Billing session | `BILLING_SESSION#{claimToken}` | `METADATA` | Stripe Checkout claim state |
-| Job | `CUSTOMER#{customerId}` | `JOB#{jobId}` | Job status and ownership |
-| Transcribe mapping | `TRANSCRIBE#{transcribeJobName}` | `JOB` | Completion event lookup |
-| Webhook | `CUSTOMER#{customerId}` | `WEBHOOK#default` | Completion webhook URL, events, and signing secret |
-| Enrichment | `CUSTOMER#{customerId}` | `ENRICHMENT#{jobId}` | Optional Bedrock enrichment status and output location |
+| Customer metadata | `CUSTOMER#{customerId}` | `METADATA` | Customer profile, plan, billing state |
+| API key | `CUSTOMER#{customerId}` | `APIKEY#{keyId}` | Hashed key, display prefix, limits |
+| Billing session | `BILLING_SESSION#{claimToken}` | `METADATA` | Stripe Checkout claim state with TTL |
+| Job | `CUSTOMER#{customerId}` | `JOB#{jobId}` | Status, ownership, file metadata, output pointers |
+| Transcribe mapping | `TRANSCRIBE#{transcribeJobName}` | `JOB` | Completion-event lookup |
+| Webhook | `CUSTOMER#{customerId}` | `WEBHOOK#default` | URL, events, signing secret |
+| Enrichment | `CUSTOMER#{customerId}` | `ENRICHMENT#{jobId}` | Optional Bedrock enrichment status and output |
 | Monthly usage | `CUSTOMER#{customerId}` | `USAGE#{yyyy-mm}` | Active jobs and reserved seconds |
 
-GSI1 maps `APIKEY#{keyId}` to the API key record without scans and maps `STRIPE_CUSTOMER#{stripeCustomerId}` to customer metadata for billing webhooks. GSI2 maps `JOBS#{customerId}` to recent jobs by `createdAt#jobId` for cursor pagination. Billing session records include `ttlEpochSeconds` so abandoned checkout attempts expire without manual cleanup.
+GSI1 maps `APIKEY#{keyId}` to an API-key record without scanning and maps `STRIPE_CUSTOMER#{stripeCustomerId}` to customer metadata for billing webhooks. GSI2 maps `JOBS#{customerId}` to recent jobs by `createdAt#jobId` for cursor pagination.
 
-## Cost-First Constraints
+## Key Constraints
 
-The stack avoids fixed monthly network and database services. There is no VPC, NAT Gateway, RDS, provisioned DynamoDB capacity, or always-on worker. SQS workers are event driven and scale to zero. Optional Bedrock enrichment is disabled by default. Rate and usage control live in API Gateway stage throttles plus Lambda-side customer counters. AWS API Gateway usage plans are documented for REST APIs, while this stack uses HTTP API for lower cost and simpler routing.
+- No VPC, NAT Gateway, RDS, OpenSearch, provisioned DynamoDB capacity, or always-on workers.
+- Lambda runtime is Node.js 20 on arm64.
+- API Gateway uses HTTP API for lower cost; REST API usage plans are not used.
+- Rate and quota control combine API Gateway stage throttles with Lambda-side per-customer usage counters.
+- S3 buckets are private, public access is blocked, and upload access is presigned.
+- Stripe billing and Bedrock enrichment are optional and disabled unless configured.
+- `sourceUrl` transcription is intentionally not implemented in v1; clients upload to owned S3 keys first.

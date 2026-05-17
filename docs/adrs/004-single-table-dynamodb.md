@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted.
+Accepted
 
 ## Context
 
-The API needs customer metadata, API keys, jobs, Transcribe job mappings, and monthly usage counters. DynamoDB on-demand capacity is a strong fit for cost-first serverless workloads.
+The API needs customer metadata, API keys, billing session state, jobs, Transcribe job mappings, webhooks, optional enrichment metadata, and monthly usage counters. DynamoDB on-demand capacity is a strong fit for cost-first serverless workloads.
 
 ## Decision
 
@@ -18,8 +18,11 @@ Records:
 | --- | --- | --- |
 | Customer | `CUSTOMER#{customerId}` | `METADATA` |
 | API key | `CUSTOMER#{customerId}` | `APIKEY#{keyId}` |
+| Billing session | `BILLING_SESSION#{claimToken}` | `METADATA` |
 | Job | `CUSTOMER#{customerId}` | `JOB#{jobId}` |
 | Transcribe mapping | `TRANSCRIBE#{transcribeJobName}` | `JOB` |
+| Webhook | `CUSTOMER#{customerId}` | `WEBHOOK#default` |
+| Enrichment | `CUSTOMER#{customerId}` | `ENRICHMENT#{jobId}` |
 | Usage | `CUSTOMER#{customerId}` | `USAGE#{yyyy-mm}` |
 
 ## Consequences
