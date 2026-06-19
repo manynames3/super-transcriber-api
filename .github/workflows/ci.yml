@@ -64,6 +64,10 @@ jobs:
         working-directory: terraform
         run: terraform validate
 
+      - name: Terraform tests
+        working-directory: terraform
+        run: terraform test
+
       - name: IaC security scan
         run: |
           python -m pip install --upgrade pip

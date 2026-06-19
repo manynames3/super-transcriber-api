@@ -13,6 +13,12 @@ locals {
   name_prefix    = lower("${var.project_name}-${var.environment}")
   s3_name_prefix = substr(replace(local.name_prefix, "_", "-"), 0, 24)
 
+  development_environments = ["dev", "development", "local"]
+  sqs_workers_enabled = var.enable_sqs_workers != null ? var.enable_sqs_workers : !contains(
+    local.development_environments,
+    lower(var.environment)
+  )
+
   common_tags = {
     Project     = var.project_name
     Environment = var.environment

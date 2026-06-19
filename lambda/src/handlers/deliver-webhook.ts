@@ -8,6 +8,14 @@ import type { WebhookDeliveryMessage } from "../shared/queue.js";
 export async function handler(event: SQSEvent): Promise<SQSBatchResponse> {
   const failures: SQSBatchResponse["batchItemFailures"] = [];
 
+  logInfo("sqs_worker_batch_started", {
+    worker: "deliver-webhook",
+    queueArn: event.Records[0]?.eventSourceARN,
+    batchSize: event.Records.length,
+    queueReceiveWaitTimeSeconds: 20,
+    idleBackoff: "managed-by-lambda-event-source-mapping"
+  });
+
   for (const record of event.Records) {
     try {
       await processRecord(record);

@@ -2,6 +2,9 @@ project_name = "super-transcriber-api"
 environment  = "dev"
 aws_region   = "us-east-1"
 
+# Dev SQS workers are disabled by default. Set true only while exercising async flows.
+# enable_sqs_workers = true
+
 admin_token            = "replace-with-a-long-random-token"
 admin_token_secret_arn = ""
 build_version          = "dev-local"
