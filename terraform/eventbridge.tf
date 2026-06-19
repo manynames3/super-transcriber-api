@@ -1,6 +1,7 @@
 resource "aws_sqs_queue" "transcribe_completion_dlq" {
   name                      = "${local.name_prefix}-transcribe-completion-dlq"
   message_retention_seconds = 1209600
+  receive_wait_time_seconds = 20
   sqs_managed_sse_enabled   = true
 }
 

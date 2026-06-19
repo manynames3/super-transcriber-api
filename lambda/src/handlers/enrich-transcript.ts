@@ -12,6 +12,14 @@ const bedrock = new BedrockRuntimeClient({});
 export async function handler(event: SQSEvent): Promise<SQSBatchResponse> {
   const failures: SQSBatchResponse["batchItemFailures"] = [];
 
+  logInfo("sqs_worker_batch_started", {
+    worker: "enrich-transcript",
+    queueArn: event.Records[0]?.eventSourceARN,
+    batchSize: event.Records.length,
+    queueReceiveWaitTimeSeconds: 20,
+    idleBackoff: "managed-by-lambda-event-source-mapping"
+  });
+
   for (const record of event.Records) {
     try {
       await processRecord(record);

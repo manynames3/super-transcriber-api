@@ -10,6 +10,12 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "enable_sqs_workers" {
+  type        = bool
+  description = "Enable Lambda SQS event-source mappings. Defaults off for dev, development, and local; defaults on elsewhere."
+  default     = null
+}
+
 variable "aws_region" {
   type        = string
   description = "AWS region for all resources."

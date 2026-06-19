@@ -137,6 +137,8 @@ terraform init
 terraform apply
 ```
 
+SQS worker mappings default to disabled for `dev`, `development`, and `local` environments to avoid idle Lambda polling. Set `TF_VAR_enable_sqs_workers=true` for an intentional async dev run; production and other environments remain enabled by default. See [docs/operations.md](docs/operations.md#run-sqs-workers-in-development) for usage and CloudWatch verification.
+
 The static sales landing page is deployed separately from [landing](landing) to Cloudflare Pages. It is not required for the AWS API runtime.
 
 ## Cost Controls
@@ -174,6 +176,7 @@ cd ../../terraform
 terraform fmt -check -recursive
 terraform init -backend=false
 terraform validate
+terraform test
 
 cd ..
 git diff --check

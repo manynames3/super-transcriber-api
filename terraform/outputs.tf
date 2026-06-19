@@ -28,6 +28,11 @@ output "transcription_start_queue_url" {
   value       = aws_sqs_queue.transcription_start.url
 }
 
+output "sqs_workers_enabled" {
+  description = "Whether Lambda SQS event-source mappings are enabled."
+  value       = local.sqs_workers_enabled
+}
+
 output "transcription_start_dlq_url" {
   description = "SQS DLQ URL for exhausted transcription start requests."
   value       = aws_sqs_queue.transcription_start_dlq.url

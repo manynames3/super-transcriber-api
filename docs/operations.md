@@ -86,6 +86,44 @@ curl -sS -X POST "$API_BASE_URL/v1/billing/portal" \
   -d '{"returnUrl":"https://example.com/account"}'
 ```
 
+## Run SQS Workers In Development
+
+The queue consumers are Lambda SQS event-source mappings, not polling loops in the application. Lambda performs `ReceiveMessage` calls and invokes the handlers only when a batch exists, so application code cannot observe an empty receive or apply its own idle backoff. Terraform sets every queue's receive wait time to 20 seconds and disables the mappings by default for `dev`, `development`, and `local`, eliminating idle dev polling. Production and other environments remain enabled by default.
+
+Enable all SQS workers intentionally while exercising an async development flow:
+
+```bash
+export TF_VAR_enable_sqs_workers=true
+terraform -chdir=terraform apply
+terraform -chdir=terraform output -raw sqs_workers_enabled
+```
+
+Disable the mappings again when finished:
+
+```bash
+export TF_VAR_enable_sqs_workers=false
+terraform -chdir=terraform apply
+```
+
+Messages sent while workers are disabled remain queued until a mapping is enabled or the four-day source-queue retention period expires. Each non-empty invocation logs `sqs_worker_batch_started` with the worker name, queue ARN, batch size, the 20-second queue receive wait, and that idle polling is managed by the Lambda event-source mapping. The handlers return partial batch failures, so Lambda deletes only successfully processed messages.
+
+To verify request usage, graph `AWS/SQS` -> `NumberOfEmptyReceives`, filter by `QueueName`, select `Sum`, and use a one-day period. The equivalent CLI query for June is:
+
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/SQS \
+  --metric-name NumberOfEmptyReceives \
+  --dimensions Name=QueueName,Value=super-transcriber-api-dev-transcription-start \
+  --start-time 2026-06-01T00:00:00Z \
+  --end-time 2026-07-01T00:00:00Z \
+  --period 86400 \
+  --statistics Sum \
+  --query 'sort_by(Datapoints,&Timestamp)[].[Timestamp,Sum]' \
+  --output table
+```
+
+After the dev mappings are disabled, daily `NumberOfEmptyReceives` should fall to zero for these queues unless another consumer outside this Terraform stack is polling them.
+
 ## Submit a Job
 
 Presign the upload:
