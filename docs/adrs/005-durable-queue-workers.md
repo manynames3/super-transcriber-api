@@ -10,7 +10,7 @@ Starting Transcribe or sending a callback directly after a database update can l
 
 ## Decision
 
-Use SQS workers for starts, callbacks, and optional enrichment. Record start and terminal event intent in a DynamoDB outbox in the same transaction as job/capacity/usage changes. Dispatch filtered stream records, retain stable event IDs, use worker leases, and reconcile stale jobs/pending events hourly. Handle EventBridge delivery failures and Lambda execution failures through a completion DLQ.
+Use SQS workers for starts and callbacks, plus an optional transcript enrichment worker. Its event-source mapping requires both SQS workers and enrichment to be enabled; otherwise it performs no empty polling. Record start and terminal event intent in a DynamoDB outbox in the same transaction as job/capacity/usage changes. Dispatch filtered stream records, retain stable event IDs, use worker leases, and reconcile stale jobs/pending events hourly. Handle EventBridge delivery failures and Lambda execution failures through a completion DLQ.
 
 ## Consequences
 

@@ -40,10 +40,10 @@ flowchart TB
     Dispatch --> HookQ["SQS webhook queue + DLQ"]
     HookQ --> Hook["Webhook Lambda<br/>Public DNS pinning, HMAC, stable event ID"]
     Hook --> DDB
-    Dispatch --> AIQ["SQS enrichment queue + DLQ"]
-    AIQ --> AI["Optional enrichment Lambda"]
-    AI --> Bedrock["Amazon Bedrock"]
-    AI --> Outputs
+    Dispatch --> EnrichmentQ["SQS enrichment queue + DLQ"]
+    EnrichmentQ --> EnrichmentWorker["Transcript enrichment worker<br/>Optional TypeScript Lambda"]
+    EnrichmentWorker --> Bedrock["Amazon Bedrock<br/>Optional LLM call"]
+    EnrichmentWorker --> Outputs
     Handlers -->|"TXT, normalized JSON, SRT, VTT"| Outputs
     Logs["CloudWatch Logs<br/>14-day retention"]
     Handlers --> Logs
@@ -58,6 +58,8 @@ flowchart TB
 ```
 
 ## Runtime Flow
+
+The transcript enrichment worker is application code, not an autonomous agent. When enabled for an eligible account, it calls an LLM through Amazon Bedrock after completion. Its SQS mapping requires both workers and enrichment to be enabled; disabled enrichment performs no queue polling or model calls. Amazon Transcribe's speech-recognition processing is independent of this optional stage.
 
 1. A customer requests a presigned MP3/M4A upload. The API stores the job/mapping with a retention TTL and returns the PUT URL, headers, job ID, and start request.
 2. Audio goes directly to private S3. The transcription route checks the owned key and object size/ETag.

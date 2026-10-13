@@ -88,9 +88,9 @@ curl -sS -X POST "$API_BASE_URL/v1/billing/portal" \
 
 ## Run SQS Workers In Development
 
-The queue consumers are Lambda SQS event-source mappings, not polling loops in the application. Lambda performs `ReceiveMessage` calls and invokes the handlers only when a batch exists, so application code cannot observe an empty receive or apply its own idle backoff. Terraform sets every queue's receive wait time to 20 seconds and disables the mappings by default for `dev`, `development`, and `local`, eliminating idle dev polling. Production and other environments remain enabled by default.
+The queue consumers are Lambda SQS event-source mappings, not polling loops in the application. Lambda performs `ReceiveMessage` calls and invokes the handlers only when a batch exists, so application code cannot observe an empty receive or apply its own idle backoff. Terraform sets every queue's receive wait time to 20 seconds and disables the mappings by default for `dev`, `development`, and `local`, eliminating idle dev polling. Transcription and webhook workers in production and other environments remain enabled by default. The transcript enrichment worker additionally requires `enable_ai_enrichment=true`; otherwise its mapping stays disabled and performs no polling.
 
-Enable all SQS workers intentionally while exercising an async development flow:
+Enable transcription and webhook workers intentionally while exercising an async development flow:
 
 ```bash
 export TF_VAR_enable_sqs_workers=true
@@ -178,16 +178,19 @@ curl -sS -X POST "$API_BASE_URL/v1/webhooks" \
 
 Webhook deliveries are SQS-backed and retried. Verify the `x-super-transcriber-signature` header by computing `HMAC-SHA256` over `{timestamp}.{payload}` with the returned signing secret.
 
-## Enable Optional AI Enrichment
+## Enable The Transcript Enrichment Worker
 
 Set these Terraform variables:
 
 ```hcl
 enable_ai_enrichment = true
 bedrock_model_id     = "anthropic.claude-3-haiku-20240307-v1:0"
+enable_sqs_workers   = true
 ```
 
-When enabled, the completion handler enqueues an enrichment job after successful transcription. The enrichment Lambda reads the transcript JSON, calls Amazon Bedrock, writes enrichment JSON to the transcript bucket, and `GET /v1/transcriptions/{jobId}` returns `enrichmentJsonUrl` after the enrichment record exists.
+For an eligible account, the completion handler records an enrichment event after successful transcription. The transcript enrichment worker (`enrich-transcript`) is ordinary TypeScript Lambda code: it reads the transcript JSON, calls an LLM through Amazon Bedrock, writes enrichment JSON to the transcript bucket, and `GET /v1/transcriptions/{jobId}` returns `enrichmentJsonUrl` after the enrichment record exists. It is not an autonomous agent. This optional stage is disabled on the hosted deployment.
+
+The existing `enable_ai_enrichment` configuration key is retained for compatibility. Setting it to `false` and applying Terraform disables the worker's SQS trigger, stopping empty polling without changing transcription or webhook processing. Enabling it alone does not override disabled SQS workers. Queued enrichment messages are retained until processing resumes or source-queue retention expires.
 
 ## Inspect Lambda Logs
 
@@ -274,7 +277,7 @@ terraform -chdir=terraform output -raw enrichment_dlq_url
 
 `Webhook not delivered`: inspect the `deliver-webhook` Lambda logs and `webhook_delivery_dlq_url`.
 
-`AI enrichment missing`: confirm `enable_ai_enrichment=true`, Bedrock model access is enabled in the AWS account, and `enrichment_dlq_url` is empty.
+`Transcript enrichment missing`: confirm `enable_ai_enrichment=true`, SQS workers are enabled, the account's plan permits enrichment, Bedrock model access is enabled in the AWS account, and `enrichment_dlq_url` is empty.
 
 ## Cost Guardrails
 
@@ -331,4 +334,4 @@ CI Checkov failures block the release outside explicit exceptions in `.checkov.y
 
 ## Cost Guardrails
 
-Keep AI enrichment, paid alarms, and PITR disabled unless needed. Set per-key request limits, customer concurrency/minute limits, S3/log retention, API stage throttles, and Lambda concurrency caps. Monitor queue age and failure depth after changes. Idle budget is a target below $3/month, while active transcription/storage/request charges vary with usage; verify account billing rather than treating a health response as cost evidence.
+Keep the transcript enrichment worker, paid alarms, and PITR disabled unless needed. Set per-key request limits, customer concurrency/minute limits, S3/log retention, API stage throttles, and Lambda concurrency caps. Monitor queue age and failure depth after changes. Idle budget is a target below $3/month, while active transcription/storage/request charges vary with usage; verify account billing rather than treating a health response as cost evidence.

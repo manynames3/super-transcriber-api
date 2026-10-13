@@ -34,7 +34,7 @@ variable "environment" {
 
 variable "enable_sqs_workers" {
   type        = bool
-  description = "Enable Lambda SQS event-source mappings. Defaults off for dev, development, and local; defaults on elsewhere."
+  description = "Enable Lambda SQS event-source mappings. Defaults off for dev, development, and local; defaults on elsewhere. Transcript enrichment also requires enable_ai_enrichment."
   default     = null
 }
 
@@ -197,13 +197,13 @@ variable "webhook_timeout_ms" {
 
 variable "enable_ai_enrichment" {
   type        = bool
-  description = "Enable optional Bedrock-powered transcript enrichment after completion."
+  description = "Enable the optional transcript enrichment worker and its SQS polling. The worker calls an LLM through Amazon Bedrock after completion."
   default     = false
 }
 
 variable "bedrock_model_id" {
   type        = string
-  description = "Bedrock model id used for optional AI enrichment."
+  description = "Bedrock LLM model id called by the optional transcript enrichment worker."
   default     = "anthropic.claude-3-haiku-20240307-v1:0"
 }
 

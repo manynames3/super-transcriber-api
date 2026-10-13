@@ -11,6 +11,7 @@ variables {
   admin_token            = "test-admin-token"
   admin_token_secret_arn = ""
   enable_sqs_workers     = null
+  enable_ai_enrichment   = false
 }
 
 run "runtime_and_recovery_are_configured" {
@@ -66,9 +67,9 @@ run "dev_workers_can_be_explicitly_enabled" {
     condition = (
       aws_lambda_event_source_mapping.transcription_start.enabled &&
       aws_lambda_event_source_mapping.webhook_delivery.enabled &&
-      aws_lambda_event_source_mapping.enrichment.enabled
+      !aws_lambda_event_source_mapping.enrichment.enabled
     )
-    error_message = "The explicit worker flag must enable every SQS event-source mapping."
+    error_message = "Explicitly enabled workers must process starts and webhooks without polling disabled enrichment."
   }
 }
 
@@ -83,8 +84,47 @@ run "production_workers_remain_enabled_by_default" {
     condition = (
       aws_lambda_event_source_mapping.transcription_start.enabled &&
       aws_lambda_event_source_mapping.webhook_delivery.enabled &&
-      aws_lambda_event_source_mapping.enrichment.enabled
+      !aws_lambda_event_source_mapping.enrichment.enabled
     )
-    error_message = "Production SQS event-source mappings must remain enabled by default."
+    error_message = "Production starts and webhooks must remain enabled while disabled enrichment stays unpolled."
+  }
+}
+
+run "enrichment_polls_when_both_features_are_enabled" {
+  command = plan
+  variables {
+    enable_sqs_workers   = true
+    enable_ai_enrichment = true
+  }
+  assert {
+    condition     = aws_lambda_event_source_mapping.enrichment.enabled
+    error_message = "The transcript enrichment worker must poll when workers and enrichment are enabled."
+  }
+}
+
+run "enrichment_does_not_override_disabled_workers" {
+  command = plan
+  variables {
+    enable_sqs_workers   = false
+    enable_ai_enrichment = true
+  }
+  assert {
+    condition = (
+      !aws_lambda_event_source_mapping.transcription_start.enabled &&
+      !aws_lambda_event_source_mapping.webhook_delivery.enabled &&
+      !aws_lambda_event_source_mapping.enrichment.enabled
+    )
+    error_message = "Enrichment must not enable polling when all SQS workers are explicitly disabled."
+  }
+}
+
+run "enrichment_respects_default_dev_worker_shutdown" {
+  command = plan
+  variables {
+    enable_ai_enrichment = true
+  }
+  assert {
+    condition     = !aws_lambda_event_source_mapping.enrichment.enabled
+    error_message = "Enrichment must not override the default development polling shutdown."
   }
 }

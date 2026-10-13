@@ -99,3 +99,24 @@ The first release's successful CodeQL workflow still reported findings, so its f
 The API-key hashing alert was dismissed as a documented false positive: the verifier hashes a CSPRNG-generated 256-bit secret, not a human password. SHA-256 remains the specified API-key storage design; no password authentication is implemented. No security rule was disabled globally.
 
 Local verification passed with 48 backend tests and eight SDK tests. Bundling also handles filesystem paths containing spaces through Node's standard file-URL conversion.
+
+## Transcript Enrichment Worker Terminology And Polling: October 13, 2026
+
+README, landing-page, API, architecture, operations, and ADR wording now identify the transcript enrichment worker as ordinary TypeScript Lambda code with an optional Bedrock LLM call. Existing resource IDs and configuration keys remain compatible.
+
+- `terraform validate` and `terraform fmt -check -recursive` passed; existing provider deprecation warnings remain.
+- Seven mock-provider Terraform tests passed, covering enabled/disabled enrichment and worker combinations. Transcription and webhook workers are unaffected when enrichment is off.
+- The deployment plan contained one in-place event-source mapping update, with no additions, deletions, or replacements; the plan safety guard passed.
+- Terraform applied successfully: zero added, one changed, zero destroyed. Live Lambda mapping inspection confirmed `enrich-transcript` Disabled and `start-transcription` / `deliver-webhook` Enabled.
+- Cloudflare Pages deployment succeeded. Live browser verification confirmed the corrected wording, a desktop screenshot was inspected, and mobile DOM/layout checks at 390px found no page or plan overflow. The existing hero image loaded successfully.
+- `git diff --check` passed. Application code and dependencies were unchanged, so backend/SDK suites were not rerun for this infrastructure/copy-only change. No Bedrock model calls were made.
+
+## Logo Update: October 13, 2026
+
+A subscription-authenticated, read-only Claude consultation proposed a waveform-to-transcript mark. Codex integrated the self-contained SVG into the landing, API reference, account, and receipt headers, removed the boxed ST tile and glow, and added a matching favicon. No dependencies or AWS resources changed.
+
+- All four pages loaded the new logo at desktop 1440px and mobile 390px widths. Visible header elements did not overlap and pages had no horizontal overflow.
+- Desktop and isolated-logo screenshots were inspected. The mark rendered at 16px, 24px, 32px, and 40px; header sizing is fixed at 32px desktop and 28px on small screens.
+- Focused assertions verified shared asset references on all pages, five SVG shapes, and no scripts, external references, embedded images, gradients, or filters.
+- Calculated contrast ratios were 8.92:1 for the header mark on charcoal, and 4.06:1 / 4.86:1 for the favicon against white / charcoal.
+- `git diff --check` passed. Backend suites were not rerun locally for this SVG/HTML/CSS-only change. These checks were performed before publication; Git history, CI runs, and Cloudflare deployment history record the subsequent release.

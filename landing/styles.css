@@ -95,25 +95,18 @@ img {
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   font-size: 15px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .brand-mark {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
+  display: block;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
-  border-radius: 8px;
-  color: #0a0a0f;
-  background: linear-gradient(135deg, #f0c95c, #c08b2e);
-  box-shadow: 0 0 24px rgba(212, 168, 67, 0.24);
-  font-family: "Geist Mono", Consolas, monospace;
-  font-size: 12px;
-  font-weight: 700;
+  object-fit: contain;
 }
 
 .nav-links {
@@ -979,8 +972,8 @@ img {
 
 @media (max-width: 410px) {
   .brand-mark {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
   }
 
   .hero h1 {

@@ -29,7 +29,7 @@ output "transcription_start_queue_url" {
 }
 
 output "sqs_workers_enabled" {
-  description = "Whether Lambda SQS event-source mappings are enabled."
+  description = "Whether SQS workers are enabled globally. The transcript enrichment worker additionally requires enable_ai_enrichment."
   value       = local.sqs_workers_enabled
 }
 
@@ -44,6 +44,6 @@ output "webhook_delivery_dlq_url" {
 }
 
 output "enrichment_dlq_url" {
-  description = "SQS DLQ URL for failed optional AI enrichment jobs."
+  description = "SQS DLQ URL for failed transcript enrichment worker jobs."
   value       = aws_sqs_queue.enrichment_dlq.url
 }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="mark-title mark-description">
+  <title id="mark-title">Super Transcriber API</title>
+  <desc id="mark-description">An audio waveform becoming three transcript lines.</desc>
+  <g fill="#d4a843">
+    <rect x="4" y="24" width="8" height="16" rx="4"/>
+    <rect x="16" y="8" width="8" height="48" rx="4"/>
+    <rect x="28" y="12" width="32" height="8" rx="4"/>
+    <rect x="28" y="28" width="32" height="8" rx="4"/>
+    <rect x="28" y="44" width="16" height="8" rx="4"/>
+  </g>
+</svg>

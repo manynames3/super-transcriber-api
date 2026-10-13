@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Super Transcriber API | Transcription API for developer teams</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
     <meta
       name="description"
       content="Super Transcriber API is a privacy-conscious transcription API for teams that need async audio jobs, private AWS deployment, usage controls, and developer-ready integration."
@@ -19,7 +20,7 @@
   <body>
     <header class="site-header" data-elevated="false">
       <a class="brand" href="#top" aria-label="Super Transcriber API home">
-        <span class="brand-mark" aria-hidden="true">ST</span>
+        <img class="brand-mark" src="./assets/super-transcriber-mark.svg" width="32" height="32" alt="" aria-hidden="true" />
         <span>Super Transcriber API</span>
       </a>
       <nav class="nav-links" aria-label="Primary navigation">
@@ -194,7 +195,7 @@ const job = await client.createTranscription({
           <div class="platform-grid">
             <article class="platform-item">
               <h3>Serverless core</h3>
-              <p>API Gateway HTTP API, Lambda Node.js 24 on arm64, SQS workers, EventBridge completion events, and DynamoDB on-demand storage.</p>
+              <p>Amazon Transcribe handles speech recognition and speaker diarization. API Gateway HTTP API, Lambda Node.js 24 on arm64, SQS, EventBridge, and DynamoDB coordinate the workflow.</p>
             </article>
             <article class="platform-item">
               <h3>Private media path</h3>
@@ -214,7 +215,7 @@ const job = await client.createTranscription({
             </article>
             <article class="platform-item">
               <h3>Cost-first shape</h3>
-              <p>No VPC, NAT Gateway, RDS, OpenSearch, or fixed monthly compute. Idle cost stays tied to minimal secrets and storage.</p>
+              <p>No VPC, NAT Gateway, RDS, OpenSearch, or fixed monthly compute. Idle costs include minimal secrets, storage, queue polling, and scheduled recovery. Enrichment polling stops when enrichment is off.</p>
             </article>
           </div>
         </div>
@@ -247,9 +248,10 @@ const job = await client.createTranscription({
               <ul>
                 <li>Higher monthly minute pools</li>
                 <li>Webhook delivery</li>
-                <li>Optional AI transcript enrichment</li>
+                <li>Optional transcript enrichment worker</li>
                 <li>Stripe-ready billing hooks</li>
               </ul>
+              <p class="plan-for">This TypeScript worker can call an LLM through Amazon Bedrock after transcription. It is disabled on the hosted deployment.</p>
             </article>
             <article class="plan">
               <h3>Private AWS</h3>

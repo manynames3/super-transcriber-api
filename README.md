@@ -23,12 +23,14 @@ The original Super Transcriber is an end-user-facing transcription web app. This
 | Processing | SQS, Amazon Transcribe, EventBridge, DynamoDB Streams |
 | Storage | DynamoDB on-demand single table; private, lifecycle-managed S3 |
 | Billing | Optional Stripe Checkout, subscriptions, and Billing Portal |
-| Optional AI | Amazon Bedrock enrichment, disabled by default |
+| Optional transcript enrichment | Transcript enrichment worker calling an LLM through Amazon Bedrock; disabled by default |
 | Infrastructure | Terraform with encrypted S3 state and native state locking |
 | Website | Static Cloudflare Pages product site and developer account |
 | Verification | Vitest, SDK tests, Terraform tests, Checkov, CodeQL, dependency audits |
 
 ## Engineering Highlights
+
+Amazon Transcribe provides speech recognition and speaker diarization. The transcript enrichment worker is ordinary TypeScript Lambda code that can call an LLM through Amazon Bedrock after transcription; it is not an autonomous agent or an always-running model. Enrichment is disabled on the hosted deployment, so normal transcription does not make LLM calls.
 
 - Transactional job admission reserves customer concurrency and writes a durable start event together.
 - Workers seal uploaded media into a processing-only S3 path and measure duration before starting Transcribe.
@@ -149,6 +151,7 @@ Dev/local SQS mappings default to disabled. Set `enable_sqs_workers=true` for a 
 - No VPC, NAT Gateway, RDS, provisioned concurrency, always-on servers, or provisioned DynamoDB capacity.
 - Idle design target: below $3/month with minimal retained storage, one admin secret, and optional paid features disabled. This is a budget target, not a measured billing guarantee.
 - SQS long polling, filtered stream processing, and bounded hourly reconciliation keep background work small.
+- The transcript enrichment worker's SQS trigger stays disabled unless both `enable_sqs_workers` and `enable_ai_enrichment` are enabled. Turning enrichment off stops its polling without pausing transcription or webhook delivery.
 - S3 retains audio for 7 days and transcript/enrichment objects for 30 days by default. Logs retain 14 days.
 - Default limits: 5 active jobs, 200 MB files, 20-minute audio, 120 monthly minutes. Active-job limits span calendar months.
 - Usage is measured in whole seconds, reserved before Transcribe, then consumed on success or refunded on failure. Calendar-month counters and rate counters enforce customer limits.

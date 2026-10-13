@@ -77,7 +77,7 @@ resource "aws_lambda_event_source_mapping" "webhook_delivery" {
 resource "aws_lambda_event_source_mapping" "enrichment" {
   event_source_arn        = aws_sqs_queue.enrichment.arn
   function_name           = aws_lambda_function.handlers["enrich-transcript"].arn
-  enabled                 = local.sqs_workers_enabled
+  enabled                 = local.sqs_workers_enabled && var.enable_ai_enrichment
   batch_size              = 1
   function_response_types = ["ReportBatchItemFailures"]
 }

@@ -256,7 +256,7 @@ Response:
 
 Returns job status. Set `includeTranscript=false` for lightweight polling without fetching transcript objects. Completed output also has an authenticated `/transcript?format=txt` download link. Duration is measured by the worker, not taken from the client's hint.
 
-Valid statuses are `PENDING_UPLOAD`, `QUEUED`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, and `FAILED`. Completed jobs include `transcriptText`, a short-lived private `transcriptJsonUrl`, and `enrichmentJsonUrl` when optional AI enrichment has completed.
+Valid statuses are `PENDING_UPLOAD`, `QUEUED`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, and `FAILED`. Completed jobs include `transcriptText`, a short-lived private `transcriptJsonUrl`, and `enrichmentJsonUrl` when the optional transcript enrichment worker has completed its LLM call. The worker is disabled on the hosted deployment.
 
 In-progress response:
 
