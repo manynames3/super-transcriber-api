@@ -91,3 +91,11 @@ The deployed Cloudflare account page connected to the live API, displayed the co
 ### Boundaries Of This Evidence
 
 These are small synthetic smoke tests, not a load test, accuracy benchmark, SLA, or production-traffic claim. Stripe recovery and subscription logic have mocked regression coverage; live payments remain untested and disabled until Stripe secret references and price IDs are configured. Bedrock enrichment is disabled and was not invoked. Source URL ingestion intentionally returns 501. The sub-$3 idle budget is a design target, not a measured monthly bill.
+
+## Version 1.0.1 Security Follow-Up
+
+The first release's successful CodeQL workflow still reported findings, so its findings were reviewed separately from the workflow status. The SDK now validates URLs with the native URL parser and trims trailing slashes without a backtracking regular expression. Test mocks compare complete origins rather than host prefixes. Subtitle cue text escapes ampersands and angle brackets as literal text, with regression coverage for markup, malformed comments, and cue-like content.
+
+The API-key hashing alert was dismissed as a documented false positive: the verifier hashes a CSPRNG-generated 256-bit secret, not a human password. SHA-256 remains the specified API-key storage design; no password authentication is implemented. No security rule was disabled globally.
+
+Local verification passed with 48 backend tests and eight SDK tests. Bundling also handles filesystem paths containing spaces through Node's standard file-URL conversion.

@@ -74,7 +74,7 @@ The integration is `presign -> S3 PUT -> start job -> webhook or poll -> downloa
 Install the SDK release package:
 
 ```bash
-npm install https://github.com/manynames3/super-transcriber-api/releases/download/v1.0.0/super-transcriber-api-client-1.0.0.tgz
+npm install https://github.com/manynames3/super-transcriber-api/releases/download/v1.0.1/super-transcriber-api-client-1.0.1.tgz
 ```
 
 ```ts

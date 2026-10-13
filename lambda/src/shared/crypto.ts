@@ -32,6 +32,7 @@ export function parseApiKey(apiKey: string): { keyId: string; keyPrefix: string 
 }
 
 export function hashApiKey(apiKey: string): string {
+  // Keys contain a CSPRNG-generated 256-bit secret, not a human password.
   return createHash("sha256").update(apiKey, "utf8").digest("hex");
 }
 

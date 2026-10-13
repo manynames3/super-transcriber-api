@@ -146,7 +146,13 @@ export class SuperTranscriberClient {
   private readonly maxRetries: number;
 
   constructor(options: SuperTranscriberClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    if (options.baseUrl.length > 8192) throw new Error("baseUrl is too long");
+    const base = new URL(options.baseUrl);
+    if (!["https:", "http:"].includes(base.protocol) || base.username || base.password || base.search || base.hash)
+      throw new Error("baseUrl must be an HTTP(S) URL without credentials, query, or fragment");
+    let end = base.href.length;
+    while (base.href[end - 1] === "/") end--;
+    this.baseUrl = base.href.slice(0, end);
     this.apiKey = options.apiKey;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.requestTimeoutMs = options.requestTimeoutMs ?? 30000;

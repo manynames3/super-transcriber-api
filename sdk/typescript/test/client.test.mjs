@@ -12,17 +12,31 @@ test("transcribeFile uploads privately, starts once, polls, and returns text", a
     requests.push({ url, options });
     if (url.endsWith("/presign")) return json({ uploadUrl: "https://s3.example/audio", uploadMethod: "PUT", uploadHeaders: { "content-type": "audio/mpeg" },
       jobId: "job-1", s3Key: "owned/audio", startRequest: { fileName: "meeting.mp3" } });
-    if (url.startsWith("https://s3.example")) return new Response(null, { status: 200 });
+    if (new URL(url).origin === "https://s3.example") return new Response(null, { status: 200 });
     if (options.method === "POST") return json({ jobId: "job-1", status: "QUEUED" }, 202);
     reads++;
     return json({ jobId: "job-1", status: reads === 1 ? "IN_PROGRESS" : "COMPLETED", transcriptText: reads >= 3 ? "Hello team." : undefined });
   } });
   const job = await client.transcribeFile(new Blob(["audio"], { type: "audio/mpeg" }), { fileName: "meeting.mp3", pollIntervalMs: 1 });
   assert.equal(job.transcriptText, "Hello team.");
-  const upload = requests.find(request => request.url.startsWith("https://s3.example"));
+  const upload = requests.find(request => new URL(request.url).origin === "https://s3.example");
   assert.equal(upload.options.headers["x-api-key"], undefined);
   assert.equal(requests.filter(request => request.url.endsWith("/v1/transcriptions") && request.options.method === "POST").length, 1);
   assert.equal(JSON.parse(requests[2].options.body).fileName, "meeting.mp3");
+});
+
+test("normalizes repeated trailing URL slashes without a backtracking regex", async () => {
+  let requested;
+  const client = new SuperTranscriberClient({ baseUrl: "https://api.example/stage////", apiKey: "secret", fetchImpl: async url => {
+    requested = url; return json({ ok: true });
+  } });
+  await client.getTranscription("id");
+  assert.equal(requested, "https://api.example/stage/v1/transcriptions/id");
+});
+
+test("rejects invalid base URLs before attaching credentials", () => {
+  for (const baseUrl of ["ftp://api.example", "https://user:secret@api.example", "https://api.example?query=value", "https://api.example#fragment", "https://api.example/" + "/".repeat(10000)])
+    assert.throws(() => new SuperTranscriberClient({ baseUrl, apiKey: "secret" }));
 });
 
 test("safe GET requests honor Retry-After", async () => {

@@ -1,13 +1,29 @@
 {
   "name": "@super-transcriber/api-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Typed client for Super Transcriber API uploads, transcripts, webhooks, keys, and billing",
   "license": "UNLICENSED",
-  "repository": { "type": "git", "url": "https://github.com/manynames3/super-transcriber-api.git", "directory": "sdk/typescript" },
-  "files": ["dist", "README.md"],
-  "engines": { "node": ">=22" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/manynames3/super-transcriber-api.git",
+    "directory": "sdk/typescript"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

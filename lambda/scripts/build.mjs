@@ -1,9 +1,10 @@
 import { createWriteStream, rmSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import archiver from "archiver";
 import { build } from "esbuild";
 
-const root = resolve(dirname(new URL(import.meta.url).pathname), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const distDir = join(root, "dist");
 const handlerDir = join(distDir, "handlers");
 const zipDir = join(distDir, "zips");

@@ -154,7 +154,9 @@ export function renderSubtitles(
   const cues = segments.map((segment, index) => {
     const content =
       `${segment.speaker ? `${segment.speaker}: ` : ""}${segment.text}`
-        .replace(/-->/g, "->")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
         .replace(/[\r\n]+/g, " ");
     return `${format === "srt" ? `${index + 1}\n` : ""}${subtitleTime(segment.start, format)} --> ${subtitleTime(segment.end, format)}\n${content}`;
   });

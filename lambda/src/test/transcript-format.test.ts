@@ -15,6 +15,16 @@ it("normalizes punctuation, speaker changes, and timed subtitle cues", () => {
   expect(renderSubtitles(result.segments, "vtt")).toMatch(/^WEBVTT\n\n00:00:00\.400/);
 });
 
+it("escapes subtitle markup and cue-like content as literal text", () => {
+  const segments = [{ start: 0, end: 1, speaker: "<speaker>", text: "<!-- --!> <b>Audio & text</b> -->\nnext" }];
+  for (const format of ["srt", "vtt"] as const) {
+    const output = renderSubtitles(segments, format);
+    expect(output).toContain("&lt;speaker&gt;: &lt;!-- --!&gt; &lt;b&gt;Audio &amp; text&lt;/b&gt; --&gt; next");
+    expect(output).not.toContain("<b>");
+    expect(output.match(/-->/g)).toHaveLength(1);
+  }
+});
+
 describe("transcript formatting", () => {
   it("extracts transcript text from Amazon Transcribe JSON", () => {
     const payload = {

@@ -5,7 +5,7 @@ Typed client for private uploads, asynchronous transcription, TXT/JSON/SRT/VTT d
 Install the release package (Node.js 22+):
 
 ```bash
-npm install https://github.com/manynames3/super-transcriber-api/releases/download/v1.0.0/super-transcriber-api-client-1.0.0.tgz
+npm install https://github.com/manynames3/super-transcriber-api/releases/download/v1.0.1/super-transcriber-api-client-1.0.1.tgz
 ```
 
 ```ts
