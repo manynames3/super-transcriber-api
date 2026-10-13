@@ -6,6 +6,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     ok: true,
     service: "super-transcriber-api",
     version: process.env.BUILD_VERSION ?? "dev",
+    features: { billing: Boolean(process.env.STRIPE_SECRET_ARN && process.env.STRIPE_WEBHOOK_SECRET_ARN && process.env.STRIPE_PRICE_IDS_JSON !== "{}"),
+      transcriptFormats: ["txt", "json", "srt", "vtt"] },
     requestId: event.requestContext.requestId
   });
 }

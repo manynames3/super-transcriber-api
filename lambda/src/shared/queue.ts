@@ -11,6 +11,8 @@ export interface WebhookDeliveryMessage {
   customerId: string;
   jobId: string;
   eventType: "transcription.completed" | "transcription.failed";
+  id?: string;
+  createdAt?: string;
 }
 
 export interface EnrichmentMessage {
@@ -25,7 +27,7 @@ export async function enqueueTranscriptionStart(message: TranscriptionStartMessa
 export async function enqueueWebhookDelivery(message: WebhookDeliveryMessage): Promise<void> {
   const queueUrl = process.env.WEBHOOK_DELIVERY_QUEUE_URL;
   if (!queueUrl) {
-    return;
+    throw new Error("WEBHOOK_DELIVERY_QUEUE_URL is required");
   }
   await sendJson(queueUrl, message);
 }

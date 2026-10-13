@@ -3,7 +3,6 @@ import {
   DEFAULT_MAX_DURATION_SECONDS,
   assertDuration,
   mergeLimitConfig,
-  reservedDurationSeconds,
   type LimitConfig
 } from "../shared/validation.js";
 
@@ -15,9 +14,9 @@ const defaults: LimitConfig = {
 };
 
 describe("usage limits", () => {
-  it("reserves configured duration or the max duration when duration is absent", () => {
-    expect(reservedDurationSeconds(90, defaults.maxDurationSeconds)).toBe(90);
-    expect(reservedDurationSeconds(undefined, defaults.maxDurationSeconds)).toBe(defaults.maxDurationSeconds);
+  it("rejects invalid account limit overrides", () => {
+    expect(() => mergeLimitConfig(defaults, { maxActiveJobs: -1 })).toThrow();
+    expect(() => mergeLimitConfig(defaults, { monthlyTranscriptionMinutes: 0.5 })).toThrow();
   });
 
   it("rejects durations above the account limit", () => {

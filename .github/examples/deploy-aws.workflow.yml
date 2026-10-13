@@ -17,13 +17,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: lambda/package-lock.json
 
       - name: Install Lambda dependencies
         working-directory: lambda
         run: npm ci
+
+      - name: Verify Lambda code
+        working-directory: lambda
+        run: npm run build && npm test
 
       - name: Bundle Lambdas
         working-directory: lambda
@@ -42,6 +46,14 @@ jobs:
         working-directory: terraform
         run: terraform init -backend-config=backend.hcl
 
+      - name: Terraform plan
+        working-directory: terraform
+        run: terraform plan -out=tfplan
+
+      - name: Block destructive plans
+        working-directory: terraform
+        run: terraform show -json tfplan | node ../scripts/check-plan.mjs
+
       - name: Terraform apply
         working-directory: terraform
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan

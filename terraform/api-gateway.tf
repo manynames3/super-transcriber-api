@@ -1,5 +1,12 @@
 locals {
   http_routes = {
+    "GET /v1/transcriptions/{jobId}/transcript"     = { lambda_key = "download-transcript" }
+    "DELETE /v1/transcriptions/{jobId}/data"        = { lambda_key = "purge-transcription" }
+    "GET /v1/api-keys"                              = { lambda_key = "manage-api-keys" }
+    "DELETE /v1/api-keys/{keyId}"                   = { lambda_key = "manage-api-keys" }
+    "POST /v1/api-keys/{keyId}/rotate"              = { lambda_key = "manage-api-keys" }
+    "GET /v1/webhooks/deliveries"                   = { lambda_key = "webhook-deliveries" }
+    "POST /v1/webhooks/deliveries/{eventId}/replay" = { lambda_key = "webhook-deliveries" }
     "GET /" = {
       lambda_key = "health"
     }
@@ -80,6 +87,11 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.http.id
   name        = "$default"
   auto_deploy = true
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_access.arn
+    format          = jsonencode({ requestId = "$context.requestId", route = "$context.routeKey", status = "$context.status", responseLength = "$context.responseLength" })
+  }
 
   default_route_settings {
     throttling_burst_limit = var.api_throttle_burst_limit

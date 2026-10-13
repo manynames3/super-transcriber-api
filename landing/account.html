@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Developer Account | Super Transcriber API</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./account.css" />
+    <script type="module" src="./account.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/"><span class="brand-mark">ST</span><span>Super Transcriber API</span></a>
+      <nav aria-label="Account navigation"><a href="/api-reference">API reference</a><a href="https://github.com/manynames3/super-transcriber-api">Source</a></nav>
+    </header>
+    <main class="account-main">
+      <div class="account-title"><div><p class="section-kicker">Developer account</p><h1>API access</h1></div><span id="service-status" role="status">Checking service...</span></div>
+      <p id="notice" class="account-notice" role="status" aria-live="polite" hidden></p>
+      <section class="account-section" id="connect-section" aria-labelledby="connect-title">
+        <h2 id="connect-title">Connect your account</h2>
+        <form id="connect-form" class="account-form"><label for="api-key">API key</label><div class="field-action"><input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="stapi_..." required /><button class="button button-primary" type="submit">Connect</button></div></form>
+      </section>
+      <section class="account-section" id="signup-section" aria-labelledby="signup-title">
+        <h2 id="signup-title">Get API access</h2>
+        <form id="checkout-form" class="account-form signup-grid"><div><label for="email">Email</label><input id="email" type="email" autocomplete="email" required /></div><div><label for="plan">Plan</label><select id="plan"><option value="starter">Starter | 120 minutes/month</option><option value="team">Team | 1,500 minutes/month</option></select></div><button class="button button-primary" id="checkout-button" type="submit" disabled>Continue to checkout</button></form>
+        <p id="billing-status" class="account-muted"></p>
+      </section>
+      <div id="account-content" hidden>
+        <section class="account-section" aria-labelledby="usage-title"><div class="section-row"><h2 id="usage-title">Usage and billing</h2><div class="account-actions"><button id="refresh" class="button button-secondary" type="button">Refresh</button><button id="portal" class="button button-secondary" type="button" disabled>Manage billing</button><button id="disconnect" class="button button-secondary" type="button">Disconnect</button></div></div><dl id="usage" class="usage-grid"></dl></section>
+        <section class="account-section" aria-labelledby="jobs-title"><h2 id="jobs-title">Transcriptions</h2><form id="upload-form" class="account-form signup-grid"><div><label for="audio">Audio file</label><input id="audio" type="file" accept=".mp3,.m4a,audio/mpeg,audio/mp4" required /></div><div><label for="speakers">Speakers</label><input id="speakers" type="number" min="1" max="10" value="2" /></div><button class="button button-primary" type="submit">Start transcription</button></form><div class="table-scroll"><table><thead><tr><th>File</th><th>Status</th><th>Duration</th><th>Transcript</th></tr></thead><tbody id="jobs"></tbody></table></div></section>
+        <section class="account-section" aria-labelledby="keys-title"><h2 id="keys-title">API keys</h2><form id="create-key-form" class="account-form signup-grid"><div><label for="key-name">Key name</label><input id="key-name" maxlength="100" value="Integration key" required /></div><div><label for="key-scope">Permissions</label><select id="key-scope"><option value="integration">Upload and transcribe</option><option value="read">Read transcripts</option><option value="full">Full account access</option></select></div><button class="button button-primary" type="submit">Create key</button></form><div class="table-scroll"><table><thead><tr><th>Name</th><th>Prefix</th><th>Status</th><th>Actions</th></tr></thead><tbody id="keys"></tbody></table></div></section>
+        <section class="account-section" aria-labelledby="hooks-title"><h2 id="hooks-title">Completion webhook</h2><form id="webhook-form" class="account-form"><label for="webhook-url">HTTPS callback URL</label><div class="field-action"><input id="webhook-url" type="url" placeholder="https://your-app.example/webhooks/transcription" required /><button class="button button-primary" type="submit">Save webhook</button></div></form><div class="table-scroll"><table><thead><tr><th>Event</th><th>Status</th><th>Attempts</th><th>Action</th></tr></thead><tbody id="deliveries"></tbody></table></div></section>
+      </div>
+      <dialog id="secret-dialog"><div class="section-row"><h2 id="secret-title">New API key</h2><button id="close-secret" class="button button-secondary" type="button">Close</button></div><p>Returned once. Keep this secret in your application's backend configuration.</p><textarea id="new-secret" readonly spellcheck="false" aria-label="New secret"></textarea><button id="copy-secret" class="button button-primary" type="button">Copy secret</button></dialog>
+    </main>
+    <footer class="site-footer"><span>&copy;2026 SUPREME AI VENTURES LLC</span><a href="/api-reference">API reference</a></footer>
+  </body>
+</html>

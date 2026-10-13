@@ -3,12 +3,14 @@ import { authenticate } from "../shared/auth.js";
 import { listJobs } from "../shared/dynamodb.js";
 import { decodeCursor, encodeCursor, parsePageLimit } from "../shared/validation.js";
 import { errorResponse, jsonResponse, logInfo } from "../shared/response.js";
+import { badRequest } from "../shared/errors.js";
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyStructuredResultV2> {
   try {
     const auth = await authenticate(event);
     const limit = parsePageLimit(event.queryStringParameters?.limit);
     const cursor = decodeCursor(event.queryStringParameters?.cursor);
+    if (cursor && (cursor.PK !== `CUSTOMER#${auth.customerId}` || cursor.GSI2PK !== `JOBS#${auth.customerId}`)) throw badRequest("Cursor belongs to a different account", "INVALID_CURSOR");
     const result = await listJobs(auth.customerId, limit, cursor);
 
     logInfo("transcriptions_listed", {

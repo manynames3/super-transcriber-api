@@ -22,6 +22,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
     return jsonResponse(200, { received: true });
   } catch (error) {
+    if (error instanceof Error && error.name === "StripeSignatureVerificationError") return errorResponse(badRequest("Invalid Stripe signature", "INVALID_STRIPE_SIGNATURE"));
     return errorResponse(error);
   }
 }
@@ -51,13 +52,15 @@ async function handleStripeEvent(event: Stripe.Event): Promise<void> {
     event.type === "customer.subscription.updated" ||
     event.type === "customer.subscription.deleted"
   ) {
-    const subscription = event.data.object as Stripe.Subscription;
+    const snapshot = event.data.object as Stripe.Subscription;
+    const subscription = await (await getStripeClient()).subscriptions.retrieve(snapshot.id);
     const currentPriceId = subscription.items.data[0]?.price.id;
     await updateCustomerBillingByStripeCustomer({
       stripeCustomerId: asId(subscription.customer),
       billingStatus: mapSubscriptionStatus(subscription.status),
-      planId: subscription.metadata.planId || getPlanIdForStripePriceId(currentPriceId),
-      stripeSubscriptionId: subscription.id
+      planId: getPlanIdForStripePriceId(currentPriceId) ?? subscription.metadata.planId,
+      stripeSubscriptionId: subscription.id,
+      eventCreated: event.created
     });
     logInfo("stripe_subscription_status_updated", {
       stripeSubscriptionId: subscription.id,

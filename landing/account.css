@@ -1,0 +1,37 @@
+.account-main { width: min(1120px, calc(100% - 40px)); margin: 48px auto 80px; }
+.site-header nav { display: flex; align-items: center; gap: 20px; }
+.button.button-primary { color: #0a0a0f; background: #d4a843; }
+.button.button-secondary { color: var(--ink); border-color: rgba(255, 255, 255, .16); background: rgba(255, 255, 255, .04); }
+.account-title, .section-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.account-title h1 { margin: 0; font-size: 36px; font-weight: 600; }
+.account-title .section-kicker { margin-bottom: 12px; }
+.account-section { border-top: 1px solid var(--line); margin-top: 32px; padding-top: 28px; }
+.account-section h2, dialog h2 { font-size: 20px; font-weight: 600; margin: 0 0 18px; }
+.section-row h2 { margin: 0; }
+.account-form { margin: 20px 0; }
+.account-form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.account-form input, .account-form select, dialog textarea { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; color: var(--ink); background: #17171c; font: inherit; font-size: 14px; }
+.account-form input:focus-visible, .account-form select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.field-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+.signup-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(140px, 1fr) auto; align-items: end; gap: 16px; }
+.account-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.account-main .button { min-height: 44px; font-size: 13px; white-space: nowrap; }
+.account-main .button:disabled { opacity: .5; cursor: default; }
+.account-muted, #service-status { color: var(--muted); font-size: 14px; }
+.account-notice { padding: 12px 0; color: var(--gold); overflow-wrap: anywhere; }
+.usage-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin-top: 28px; }
+.usage-grid dt { color: var(--muted); font-size: 13px; }
+.usage-grid dd { margin: 6px 0 0; font-size: 24px; font-weight: 600; overflow-wrap: anywhere; }
+.table-scroll { overflow-x: auto; margin-top: 22px; }
+.account-main table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.account-main th, .account-main td { padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+.account-main th { color: var(--muted); font-weight: 500; }
+.account-main td:first-child { overflow-wrap: anywhere; min-width: 140px; }
+.account-main td .button { min-height: 34px; margin: 2px 6px 2px 0; padding: 6px 10px; }
+dialog { width: min(560px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--line); border-radius: 8px; background: #17171c; color: var(--ink); }
+dialog::backdrop { background: rgba(0, 0, 0, .75); }
+dialog p { color: var(--muted); font-size: 14px; }
+dialog textarea { min-height: 100px; margin-bottom: 16px; resize: vertical; overflow-wrap: anywhere; }
+#receipt-secret { width: 100%; min-height: 100px; padding: 12px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 6px; background: #17171c; color: var(--ink); font: inherit; overflow-wrap: anywhere; }
+.receipt { max-width: 720px; }
+@media (max-width: 700px) { .account-main { width: calc(100% - 28px); margin-top: 30px; } .signup-grid, .field-action { grid-template-columns: 1fr; } .usage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .account-main .button { white-space: normal; } .account-title h1 { font-size: 30px; } .site-header nav { display: flex; gap: 12px; font-size: 12px; } }

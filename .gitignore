@@ -5,6 +5,10 @@ terraform.tfstate
 terraform.tfstate.*
 terraform/terraform.tfvars
 terraform/tfplan
+terraform/backend.hcl
+terraform/adoption.auto.tf*
+terraform/plan.json
+artifacts/
 *.tfplan
 .DS_Store
 .env

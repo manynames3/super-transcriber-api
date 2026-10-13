@@ -132,7 +132,7 @@ describe("request validation", () => {
       enabled: true
     });
 
-    expect(() => validateConfigureWebhookRequest({ url: "http://example.com/webhook" })).toThrow(/https/);
+    expect(() => validateConfigureWebhookRequest({ url: "http://example.com/webhook" })).toThrow(/https/i);
   });
 
   it("allows checkout redirects to be omitted before a custom domain exists", () => {

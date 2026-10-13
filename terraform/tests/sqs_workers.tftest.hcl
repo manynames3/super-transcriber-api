@@ -8,7 +8,25 @@ override_data {
 }
 
 variables {
-  admin_token = "test-admin-token"
+  admin_token            = "test-admin-token"
+  admin_token_secret_arn = ""
+  enable_sqs_workers     = null
+}
+
+run "runtime_and_recovery_are_configured" {
+  command = plan
+  assert {
+    condition     = alltrue([for fn in aws_lambda_function.handlers : fn.runtime == "nodejs24.x" && length(fn.architectures) == 1 && contains(fn.architectures, "arm64")])
+    error_message = "Every function must run on supported Node.js 24 arm64."
+  }
+  assert {
+    condition     = aws_dynamodb_table.main.stream_enabled && aws_lambda_event_source_mapping.outbox.starting_position == "TRIM_HORIZON"
+    error_message = "Durable outbox processing requires a DynamoDB stream."
+  }
+  assert {
+    condition     = aws_sqs_queue.transcription_start.visibility_timeout_seconds >= 6 * aws_lambda_function.handlers["start-transcription"].timeout
+    error_message = "Worker queue visibility must cover six times the worker timeout."
+  }
 }
 
 run "dev_workers_are_disabled_by_default" {

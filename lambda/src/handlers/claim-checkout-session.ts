@@ -1,115 +1,185 @@
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
+import { TransactWriteCommand } from "@aws-sdk/lib-dynamodb";
+import type {
+  APIGatewayProxyEventV2,
+  APIGatewayProxyStructuredResultV2,
+} from "aws-lambda";
+import { API_SCOPES } from "../shared/auth.js";
 import { generateApiKey, hashApiKey } from "../shared/crypto.js";
 import {
+  client,
+  tableName,
+  getCustomer,
   claimBillingSessionWithApiKey,
   customerPk,
   getBillingSession,
   markBillingSessionPaid,
   nowIso,
   type ApiKeyRecord,
-  type CustomerRecord
+  type CustomerRecord,
 } from "../shared/dynamodb.js";
 import { conflict, notFound, notImplemented } from "../shared/errors.js";
-import { getPlan, isStripeConfigured } from "../shared/plans.js";
-import { errorResponse, jsonResponse, logInfo } from "../shared/response.js";
+import {
+  getPlan,
+  getPlanIdForStripePriceId,
+  isStripeConfigured,
+} from "../shared/plans.js";
+import { errorResponse, jsonResponse } from "../shared/response.js";
 import { getStripeClient } from "../shared/stripe.js";
-import { parseJsonBody, validateClaimCheckoutRequest } from "../shared/validation.js";
+import {
+  parseJsonBody,
+  validateClaimCheckoutRequest,
+} from "../shared/validation.js";
 
-export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyStructuredResultV2> {
+export async function handler(
+  event: APIGatewayProxyEventV2,
+): Promise<APIGatewayProxyStructuredResultV2> {
   try {
-    if (!isStripeConfigured()) {
-      throw notImplemented("Stripe checkout is not configured for this deployment");
-    }
-
+    if (!isStripeConfigured())
+      throw notImplemented(
+        "Stripe checkout is not configured for this deployment",
+      );
     const input = validateClaimCheckoutRequest(parseJsonBody(event.body));
     let sessionRecord = await getBillingSession(input.claimToken);
-    if (!sessionRecord || sessionRecord.checkoutSessionId !== input.checkoutSessionId) {
-      throw notFound("Checkout session not found");
-    }
-    if (sessionRecord.status === "CLAIMED") {
-      throw conflict("Checkout session has already been claimed", "CHECKOUT_ALREADY_CLAIMED");
-    }
-
-    if (sessionRecord.status !== "PAID") {
-      const stripe = await getStripeClient();
-      const stripeSession = await stripe.checkout.sessions.retrieve(input.checkoutSessionId);
-      if (stripeSession.status !== "complete" || (stripeSession.payment_status !== "paid" && stripeSession.payment_status !== "no_payment_required")) {
-        throw conflict("Checkout session is not paid yet", "CHECKOUT_NOT_PAID");
-      }
+    if (
+      !sessionRecord ||
+      sessionRecord.checkoutSessionId !== input.checkoutSessionId ||
+      Date.parse(sessionRecord.expiresAt) <= Date.now()
+    )
+      throw notFound("Checkout receipt is invalid or expired");
+    if (sessionRecord.status === "CLAIMED" && !input.recover)
+      throw conflict(
+        "Already claimed; use recover:true to replace the receipt's API key",
+        "CHECKOUT_ALREADY_CLAIMED",
+      );
+    const stripe = await getStripeClient();
+    const checkout = await stripe.checkout.sessions.retrieve(
+      input.checkoutSessionId,
+    );
+    if (
+      checkout.status !== "complete" ||
+      !["paid", "no_payment_required"].includes(checkout.payment_status)
+    )
+      throw conflict("Checkout is not paid", "CHECKOUT_NOT_PAID");
+    const subscriptionId = asId(checkout.subscription);
+    if (!subscriptionId)
+      throw conflict("Checkout has no subscription", "SUBSCRIPTION_REQUIRED");
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    if (!["active", "trialing"].includes(subscription.status))
+      throw conflict("Subscription is not active", "SUBSCRIPTION_INACTIVE");
+    const planId =
+      getPlanIdForStripePriceId(subscription.items.data[0]?.price.id) ??
+      sessionRecord.planId;
+    const plan = getPlan(planId);
+    if (sessionRecord.status !== "CLAIMED") {
       await markBillingSessionPaid({
         claimToken: input.claimToken,
         checkoutSessionId: input.checkoutSessionId,
-        stripeCustomerId: asId(stripeSession.customer),
-        stripeSubscriptionId: asId(stripeSession.subscription)
+        stripeCustomerId: asId(checkout.customer),
+        stripeSubscriptionId: subscriptionId,
       });
-      sessionRecord = await getBillingSession(input.claimToken);
-      if (!sessionRecord) {
-        throw notFound("Checkout session not found");
-      }
+      sessionRecord = (await getBillingSession(input.claimToken))!;
     }
-
-    const plan = getPlan(sessionRecord.planId);
     const generated = generateApiKey();
     const now = nowIso();
     const customer: CustomerRecord = {
       PK: customerPk(sessionRecord.customerId),
       SK: "METADATA",
-      GSI1PK: sessionRecord.stripeCustomerId ? `STRIPE_CUSTOMER#${sessionRecord.stripeCustomerId}` : undefined,
+      GSI1PK: `STRIPE_CUSTOMER#${asId(checkout.customer)}`,
       GSI1SK: sessionRecord.customerId,
       recordType: "CUSTOMER",
       customerId: sessionRecord.customerId,
       name: sessionRecord.email,
       email: sessionRecord.email,
       planId: plan.planId,
-      billingStatus: "ACTIVE",
-      stripeCustomerId: sessionRecord.stripeCustomerId ?? undefined,
-      stripeSubscriptionId: sessionRecord.stripeSubscriptionId ?? undefined,
+      billingStatus: subscription.status === "trialing" ? "TRIALING" : "ACTIVE",
+      stripeCustomerId: asId(checkout.customer),
+      stripeSubscriptionId: subscriptionId,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
     const apiKey: ApiKeyRecord = {
-      PK: customerPk(sessionRecord.customerId),
+      PK: customer.PK,
       SK: `APIKEY#${generated.keyId}`,
       GSI1PK: `APIKEY#${generated.keyId}`,
-      GSI1SK: sessionRecord.customerId,
+      GSI1SK: customer.customerId,
       recordType: "API_KEY",
-      customerId: sessionRecord.customerId,
+      customerId: customer.customerId,
       keyId: generated.keyId,
       keyPrefix: generated.keyPrefix,
       keyHash: hashApiKey(generated.apiKey),
       name: `${plan.name} API key`,
       status: "ACTIVE",
-      limits: plan.limits,
+      scopes: API_SCOPES,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
-
-    await claimBillingSessionWithApiKey(sessionRecord, customer, apiKey);
-
-    logInfo("checkout_session_claimed", {
-      requestId: event.requestContext.requestId,
-      customerId: sessionRecord.customerId,
-      keyId: generated.keyId,
-      planId: plan.planId
-    });
-
+    if (sessionRecord.status === "CLAIMED") {
+      if (
+        !(await getCustomer(customer.customerId)) ||
+        !sessionRecord.createdApiKeyId
+      )
+        throw notFound("Customer not found");
+      await client.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              Update: {
+                TableName: tableName,
+                Key: { PK: sessionRecord.PK, SK: sessionRecord.SK },
+                UpdateExpression:
+                  "SET createdApiKeyId = :new, updatedAt = :now",
+                ConditionExpression: "createdApiKeyId = :old",
+                ExpressionAttributeValues: {
+                  ":new": generated.keyId,
+                  ":old": sessionRecord.createdApiKeyId,
+                  ":now": now,
+                },
+              },
+            },
+            {
+              Update: {
+                TableName: tableName,
+                Key: {
+                  PK: customer.PK,
+                  SK: `APIKEY#${sessionRecord.createdApiKeyId}`,
+                },
+                UpdateExpression: "SET #status = :disabled, updatedAt = :now",
+                ExpressionAttributeNames: { "#status": "status" },
+                ExpressionAttributeValues: {
+                  ":disabled": "DISABLED",
+                  ":now": now,
+                },
+              },
+            },
+            {
+              Put: {
+                TableName: tableName,
+                Item: apiKey,
+                ConditionExpression: "attribute_not_exists(PK)",
+              },
+            },
+          ],
+        }),
+      );
+    } else await claimBillingSessionWithApiKey(sessionRecord, customer, apiKey);
     return jsonResponse(201, {
-      customerId: sessionRecord.customerId,
+      customerId: customer.customerId,
       planId: plan.planId,
-      billingStatus: "ACTIVE",
+      billingStatus: customer.billingStatus,
       keyId: generated.keyId,
       keyPrefix: generated.keyPrefix,
       apiKey: generated.apiKey,
-      createdAt: now
+      scopes: API_SCOPES,
+      createdAt: now,
     });
   } catch (error) {
+    if (error instanceof Error && error.name === "TransactionCanceledException")
+      return errorResponse(
+        conflict("Receipt changed; retry with recover:true", "CLAIM_CONFLICT"),
+      );
     return errorResponse(error);
   }
 }
-
 function asId(value: string | { id?: string } | null): string {
-  if (!value) {
-    return "";
-  }
-  return typeof value === "string" ? value : value.id ?? "";
+  return typeof value === "string" ? value : (value?.id ?? "");
 }

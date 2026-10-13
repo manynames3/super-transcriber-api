@@ -4,7 +4,7 @@ resource "aws_lambda_function" "handlers" {
   function_name                  = "${local.name_prefix}-${each.key}"
   role                           = aws_iam_role.lambda[each.key].arn
   handler                        = "index.handler"
-  runtime                        = "nodejs20.x"
+  runtime                        = "nodejs24.x"
   architectures                  = ["arm64"]
   filename                       = each.value.filename
   source_code_hash               = filebase64sha256(each.value.filename)

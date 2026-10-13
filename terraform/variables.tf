@@ -4,6 +4,28 @@ variable "project_name" {
   default     = "super-transcriber-api"
 }
 
+variable "api_key_requests_per_minute" {
+  type        = number
+  default     = 120
+  description = "Per-key fixed-window request limit, enforced with TTL counters."
+  validation {
+    condition     = var.api_key_requests_per_minute > 0 && floor(var.api_key_requests_per_minute) == var.api_key_requests_per_minute
+    error_message = "Request limit must be a positive integer."
+  }
+}
+
+variable "billing_success_url" {
+  type        = string
+  default     = "https://super-transcriber-api.pages.dev/billing"
+  description = "Hosted receipt page for optional Stripe Checkout."
+}
+
+variable "enable_job_reconciliation" {
+  type        = bool
+  default     = true
+  description = "Enable hourly bounded recovery of pending events and stale jobs."
+}
+
 variable "environment" {
   type        = string
   description = "Deployment environment name."

@@ -69,7 +69,7 @@ curl -sS -X POST "$API_BASE_URL/v1/billing/checkout" \
   -d '{"email":"dev@example.com","planId":"starter"}'
 ```
 
-`successUrl` and `cancelUrl` may be omitted while you do not have a stable domain; the API Gateway URL is used as the fallback Stripe redirect target. Claim the API key after successful checkout with the `checkoutSessionId` and `claimToken` from the checkout response or success redirect:
+`successUrl` and `cancelUrl` may be omitted. The configured `billing_success_url` defaults to the Cloudflare Pages receipt page, which claims the key after payment. The cancel URL falls back to API health. A custom domain is not required. Claim the API key after successful checkout with the `checkoutSessionId` and `claimToken` from the checkout response or success redirect:
 
 ```bash
 curl -sS -X POST "$API_BASE_URL/v1/billing/claim" \
@@ -105,7 +105,7 @@ export TF_VAR_enable_sqs_workers=false
 terraform -chdir=terraform apply
 ```
 
-Messages sent while workers are disabled remain queued until a mapping is enabled or the four-day source-queue retention period expires. Each non-empty invocation logs `sqs_worker_batch_started` with the worker name, queue ARN, batch size, the 20-second queue receive wait, and that idle polling is managed by the Lambda event-source mapping. The handlers return partial batch failures, so Lambda deletes only successfully processed messages.
+Messages sent while workers are disabled remain queued until a mapping is enabled or the four-day source-queue retention period expires. Worker failures are recorded as structured CloudWatch entries; empty receives do not invoke application handlers. The handlers return partial batch failures, so Lambda deletes only successfully processed messages.
 
 To verify request usage, graph `AWS/SQS` -> `NumberOfEmptyReceives`, filter by `QueueName`, select `Sum`, and use a one-day period. The equivalent CLI query for June is:
 
@@ -286,3 +286,49 @@ terraform -chdir=terraform output -raw enrichment_dlq_url
 - Keep optional Bedrock enrichment disabled unless the deployment needs LLM outputs.
 - HTTP API does not use REST API usage plans in this stack. Per-key limits are enforced by Lambda and DynamoDB usage counters.
 - Avoid enabling VPC attachment, NAT Gateway, provisioned capacity, or fixed monthly services.
+
+## Durable Completion And Reconciliation
+
+Job admission and terminal settlement use DynamoDB transactions. Pending events are stored in an outbox and dispatched by a filtered DynamoDB stream. A queue-send failure leaves the event pending. Duplicate delivery is expected; callbacks carry a stable event ID.
+
+An hourly `reconcile-jobs` Lambda retries pending outbox events and checks stale jobs against Transcribe. Recovery queries are bounded to 100 records per category per run. Jobs past a 24-hour processing deadline are failed and their usage is settled. Completion and recovery Lambda execution failures go to the completion SQS DLQ; EventBridge target delivery failures use the same queue.
+
+Inspect logs without dumping request bodies, API keys, receipts, or media:
+
+```bash
+aws logs tail /aws/lambda/super-transcriber-api-dev-start-transcription --since 1h --region us-east-1
+aws logs tail /aws/lambda/super-transcriber-api-dev-dispatch-outbox --since 1h --region us-east-1
+aws logs tail /aws/lambda/super-transcriber-api-dev-reconcile-jobs --since 1h --region us-east-1
+```
+
+Use `GET /v1/webhooks/deliveries` to inspect customer-visible attempts and the replay endpoint to retry them. Replay completion events through the completion Lambda only after checking their Transcribe job name; the handler reads the authoritative service status and settlement is idempotent.
+
+## Key Recovery And Deletion
+
+Customers can create, list, revoke, and rotate scoped keys. Revocation is immediate after the key record is updated. Rotating the currently connected account key requires replacing the client credential. Checkout receipts permit recovery for 24 hours; after that, verify customer ownership through your support process before admin provisioning. Never request that customers post keys in GitHub issues.
+
+Soft deletion hides a job. The `/data` deletion endpoint permanently purges eligible jobs, including already soft-deleted jobs. Wait for active processing and upload URL expiry. Standard S3 lifecycle and DynamoDB TTL cleanup remain asynchronous; job metadata/mappings are assigned the transcript-retention TTL. Logs retain 14 days, dispatched outbox records 7 days, and delivery records 30 days.
+
+## State And Release Safety
+
+Use encrypted S3 state with `use_lockfile=true` and a separate key for each environment. Protect the state bucket with IAM and versioning in the bootstrap account. Terraform 1.10+ and the locked AWS provider are required. Runtime, bundle target, and CI use Node.js 24.
+
+When adopting this already-deployed API after local state loss, `scripts/adopt-existing-stack.mjs` discovers only resources matching the selected API/stack prefix and generates ignored import blocks and configuration. Review the plan with `scripts/check-plan.mjs`; it rejects deletions/replacements. Never import the original consumer application's state into this API stack.
+
+```bash
+API_ID=your-api-id STACK_PREFIX=super-transcriber-api-dev node scripts/adopt-existing-stack.mjs
+terraform -chdir=terraform init -backend-config=backend.hcl
+terraform -chdir=terraform plan -out=tfplan
+terraform -chdir=terraform show -json tfplan | node scripts/check-plan.mjs
+terraform -chdir=terraform apply tfplan
+```
+
+Remove generated import blocks after successful adoption. The hosted release enables SQS workers; disabling them pauses processing. The account and receipt pages are static Pages assets, with API keys kept in browser memory. Receipts may stay in session storage for recovery, so treat the receipt token as a secret.
+
+## Security Scan Policy
+
+CI Checkov failures block the release outside explicit exceptions in `.checkov.yml`. Those exceptions cover Lambda-side auth, no VPC, AWS-managed encryption, 14-day logs, unversioned regional media, optional PITR/tracing, and operator-managed secret rotation. They are architectural decisions, not a claim that every default Checkov recommendation is implemented.
+
+## Cost Guardrails
+
+Keep AI enrichment, paid alarms, and PITR disabled unless needed. Set per-key request limits, customer concurrency/minute limits, S3/log retention, API stage throttles, and Lambda concurrency caps. Monitor queue age and failure depth after changes. Idle budget is a target below $3/month, while active transcription/storage/request charges vary with usage; verify account billing rather than treating a health response as cost evidence.

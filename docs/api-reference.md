@@ -31,6 +31,8 @@ Response:
 
 ## POST /v1/api-keys
 
+Authenticated customer keys with `keys:manage` may create additional keys for their own account. Admin provisioning accepts `x-admin-token` or a bearer admin token. Optional `scopes` restrict keys; callers cannot grant permissions they do not hold. Customer/key hashes are never returned by listing routes.
+
 Admin-only route protected by the Secrets Manager-backed admin token through `Authorization: Bearer` or `x-admin-token`.
 
 Request:
@@ -96,7 +98,7 @@ Response:
   "billingStatus": "ACTIVE",
   "keyId": "2f4d6e8a0b1c2d3e4f",
   "keyPrefix": "stapi_2f4d6e8a0b1c2d3e4f",
-  "apiKey": "stapi_2f4d6e8a0b1c2d3e4f_plaintext-secret-returned-once",
+  "apiKey": "stapi_KEY_ID_SECRET_RETURNED_ONLY_ONCE",
   "createdAt": "2026-05-16T17:30:00.000Z"
 }
 ```
@@ -157,7 +159,7 @@ Response:
   "customerId": "cust_8d7f2a1c4b3e9a00",
   "keyId": "2f4d6e8a0b1c2d3e4f",
   "keyPrefix": "stapi_2f4d6e8a0b1c2d3e4f",
-  "apiKey": "stapi_2f4d6e8a0b1c2d3e4f_plaintext-secret-returned-once",
+  "apiKey": "stapi_KEY_ID_SECRET_RETURNED_ONLY_ONCE",
   "createdAt": "2026-05-16T17:30:00.000Z"
 }
 ```
@@ -252,7 +254,9 @@ Response:
 
 ## GET /v1/transcriptions/{jobId}
 
-Returns job status. Valid statuses are `PENDING_UPLOAD`, `QUEUED`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, and `FAILED`. Completed jobs include `transcriptText`, a short-lived private `transcriptJsonUrl`, and `enrichmentJsonUrl` when optional AI enrichment has completed.
+Returns job status. Set `includeTranscript=false` for lightweight polling without fetching transcript objects. Completed output also has an authenticated `/transcript?format=txt` download link. Duration is measured by the worker, not taken from the client's hint.
+
+Valid statuses are `PENDING_UPLOAD`, `QUEUED`, `STARTING`, `IN_PROGRESS`, `COMPLETED`, and `FAILED`. Completed jobs include `transcriptText`, a short-lived private `transcriptJsonUrl`, and `enrichmentJsonUrl` when optional AI enrichment has completed.
 
 In-progress response:
 
@@ -362,7 +366,7 @@ Example webhook payload:
 
 ```json
 {
-  "id": "4c94c9e8-9cb2-4b9d-9b3b-63d3eb5a935a",
+  "id": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821:transcription.completed",
   "type": "transcription.completed",
   "createdAt": "2026-05-16T17:35:22.000Z",
   "data": {
@@ -377,3 +381,132 @@ Example webhook payload:
   }
 }
 ```
+
+## GET /v1/transcriptions/{jobId}/transcript
+
+Protected by `transcriptions:read`. Returns an attachment in `txt` (default), `json`, `srt`, or `vtt`.
+
+```bash
+curl "$API_BASE_URL/v1/transcriptions/$JOB_ID/transcript?format=txt" -H "x-api-key: $API_KEY" -o meeting.txt
+```
+
+TXT body:
+
+```text
+Welcome everyone. Today we are discussing the release.
+```
+
+Normalized JSON example:
+
+```json
+{
+  "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
+  "durationSeconds": 60.4,
+  "languageCode": "en-US",
+  "transcriptText": "Welcome everyone.",
+  "wordCount": 2,
+  "words": [
+    {"text":"Welcome","start":0.4,"end":0.8,"speaker":"spk_0","confidence":0.99},
+    {"text":"everyone.","start":0.9,"end":1.4,"speaker":"spk_0","confidence":0.98}
+  ],
+  "segments": [{"text":"Welcome everyone.","start":0.4,"end":1.4,"speaker":"spk_0"}]
+}
+```
+
+SRT example:
+
+```text
+1
+00:00:00,400 --> 00:00:01,400
+spk_0: Welcome everyone.
+```
+
+VTT uses the same cues with a `WEBVTT` header and decimal timestamp separators. Before completion: `409 TRANSCRIPT_NOT_READY`. Expired output: `410 TRANSCRIPT_EXPIRED` when metadata still exists; expired/removed jobs return 404.
+
+## DELETE /v1/transcriptions/{jobId}/data
+
+Protected by `transcriptions:delete`; permitted even when billing is blocked. Unlike soft deletion, this removes source/sealed audio, transcript/enrichment objects, job/mapping/enrichment records, delivery history, and Transcribe metadata. Aggregate usage and operational logs remain.
+
+```bash
+curl -X DELETE "$API_BASE_URL/v1/transcriptions/$JOB_ID/data" -H "x-api-key: $API_KEY"
+```
+
+Response: `204 No Content`, including retries after removal. Active processing returns `409 JOB_ACTIVE`. Unexpired upload URLs return `409 UPLOAD_URL_STILL_ACTIVE`; wait until their expiry so a previously issued URL cannot recreate purged audio. Only the authenticated customer's records are addressed.
+
+## GET /v1/api-keys
+
+Requires `keys:manage`. Query parameters: `limit` (1–100) and `cursor`.
+
+```bash
+curl "$API_BASE_URL/v1/api-keys?limit=20" -H "x-api-key: $API_KEY"
+```
+
+```json
+{"items":[{"keyId":"18hexcharacters","keyPrefix":"stapi_18hexcharacters","name":"Integration key","status":"ACTIVE","scopes":["transcriptions:read"],"createdAt":"2026-10-13T00:00:00Z"}],"nextCursor":null}
+```
+
+## DELETE /v1/api-keys/{keyId}
+
+Requires `keys:manage`. Revocation is checked with a consistent base-table read.
+
+```bash
+curl -X DELETE "$API_BASE_URL/v1/api-keys/$KEY_ID" -H "x-api-key: $API_KEY"
+```
+
+```json
+{"keyId":"18hexcharacters","status":"DISABLED"}
+```
+
+## POST /v1/api-keys/{keyId}/rotate
+
+Requires `keys:manage`. Atomically creates a replacement with the same scopes and revokes the old key.
+
+```bash
+curl -X POST "$API_BASE_URL/v1/api-keys/$KEY_ID/rotate" -H "x-api-key: $API_KEY"
+```
+
+```json
+{"keyId":"new18hexcharacters","keyPrefix":"stapi_new18hexcharacters","apiKey":"stapi_returned_once","scopes":["transcriptions:read"]}
+```
+
+Keep the response secure. Do not blindly retry rotation after an uncertain response; the old key may already be revoked.
+
+## GET /v1/webhooks/deliveries
+
+Requires `webhooks:manage`. Lists customer-owned delivery attempts retained for 30 days; supports `limit` and `cursor`. Ordering is by job/event key, not guaranteed chronological order.
+
+```bash
+curl "$API_BASE_URL/v1/webhooks/deliveries" -H "x-api-key: $API_KEY"
+```
+
+```json
+{"items":[{"eventId":"job-id:transcription.completed","jobId":"job-id","status":"DELIVERED","attempts":1,"lastError":null,"updatedAt":"2026-10-13T00:00:00Z","recordType":"DELIVERY","ttlEpochSeconds":1794528000}],"nextCursor":null}
+```
+
+## POST /v1/webhooks/deliveries/{eventId}/replay
+
+Requires `webhooks:manage`. URL-encode the event ID and replay only an owned, retained delivery for a visible job.
+
+```bash
+curl -X POST "$API_BASE_URL/v1/webhooks/deliveries/$ENCODED_EVENT_ID/replay" -H "x-api-key: $API_KEY"
+```
+
+```json
+{"eventId":"job-id:transcription.completed","status":"QUEUED"}
+```
+
+## Usage, Billing, And Retries
+
+Active jobs are counted across months. Workers measure media and reserve monthly seconds before calling Transcribe; a caller-supplied `durationSeconds` is advisory. Successful jobs consume rounded-up whole seconds; failed jobs refund the reservation. Admission can return 202 followed by a FAILED job if media validation or monthly quota checks fail.
+
+`GET /v1/billing/account` also returns:
+
+```json
+{"usage":{"usageMonth":"2026-10","activeJobs":1,"reservedSeconds":62,"usedSeconds":120,"completedJobs":2,"failedJobs":0,"usedMinutes":2,"reservedMinutes":1.0333333333,"remainingMinutes":116.9666666667}}
+```
+
+Subscription changes apply to existing keys. Checkout/claim are public routes, protected by payment verification and a secret receipt rather than API-key authentication. Receipts expire after 24 hours. Repeat `POST /v1/billing/claim` with `recover:true` to replace a lost receipt-issued key after verifying an active subscription; other keys remain active. After receipt expiry, an admin must verify ownership and provision a replacement.
+
+Identical transcription submissions for the same upload and speaker/language options return the existing job. Different options return 409. GET/DELETE and same-upload starts are safe to retry. Presign/key/checkout creation and rotation return new resources or one-time secrets and should not be retried blindly.
+
+Rate limits default to 120 requests per key per minute with a `Retry-After` header on 429. Job/minute quotas are per customer. HTTP API usage plans are not used. Webhooks have a stable `id`; deduplicate by that ID, verify HMAC over the raw body, and reject timestamps outside a five-minute window. Delivery uses public HTTPS endpoints on port 443, validates DNS addresses, and does not follow redirects.

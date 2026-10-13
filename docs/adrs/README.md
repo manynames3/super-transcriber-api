@@ -9,3 +9,4 @@ Concise records for the core architecture decisions in Super Transcriber API.
 | [003 Cost-First Serverless](003-cost-first-serverless.md) | Use AWS serverless services without fixed monthly infrastructure |
 | [004 Single-Table DynamoDB](004-single-table-dynamodb.md) | Store customers, keys, jobs, mappings, and usage in one table |
 | [005 Durable Queue Workers](005-durable-queue-workers.md) | Decouple job submission, Transcribe start, webhooks, and enrichment with SQS |
+| [006 Verified Usage And Output](006-verified-usage-and-output.md) | Verify sealed media before metering and provide portable transcript formats |

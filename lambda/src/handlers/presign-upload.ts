@@ -45,6 +45,10 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       transcribeJobName,
       transcriptJsonS3Key,
       usageMonth: monthKey(),
+      contentType: input.contentType,
+      fileSizeBytes: input.fileSizeBytes,
+      ttlEpochSeconds: Math.floor(Date.now() / 1000) + Number(process.env.JOB_RETENTION_DAYS ?? "30") * 86400,
+      uploadExpiresAt: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
       createdAt: now,
       updatedAt: now
     };
@@ -52,6 +56,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       PK: `TRANSCRIBE#${transcribeJobName}`,
       SK: "JOB",
       recordType: "TRANSCRIBE_JOB",
+      ttlEpochSeconds: job.ttlEpochSeconds,
       customerId: auth.customerId,
       jobId,
       transcribeJobName,

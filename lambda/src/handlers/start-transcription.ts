@@ -1,125 +1,80 @@
 import type { SQSBatchResponse, SQSEvent, SQSRecord } from "aws-lambda";
 import {
   getJob,
-  markJobFailed,
   markJobInProgress,
   markJobStarting,
-  releaseUsageReservation
 } from "../shared/dynamodb.js";
-import { logError, logInfo, logWarn } from "../shared/response.js";
+import { ApiError } from "../shared/errors.js";
+import { finishJob, reserveVerifiedUsage } from "../shared/ledger.js";
+import { verifyAudio } from "../shared/media.js";
+import { logError } from "../shared/response.js";
 import { startTranscribeJob } from "../shared/transcribe.js";
 
-interface StartMessage {
-  customerId: string;
-  jobId: string;
-}
-
 export async function handler(event: SQSEvent): Promise<SQSBatchResponse> {
-  const failures: SQSBatchResponse["batchItemFailures"] = [];
-
-  logInfo("sqs_worker_batch_started", {
-    worker: "start-transcription",
-    queueArn: event.Records[0]?.eventSourceARN,
-    batchSize: event.Records.length,
-    queueReceiveWaitTimeSeconds: 20,
-    idleBackoff: "managed-by-lambda-event-source-mapping"
-  });
-
+  const batchItemFailures: SQSBatchResponse["batchItemFailures"] = [];
   for (const record of event.Records) {
     try {
       await processRecord(record);
     } catch (error) {
-      failures.push({ itemIdentifier: record.messageId });
-      logError("transcription_start_worker_failed", {
+      logError("start_worker_failed", {
         messageId: record.messageId,
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: error instanceof Error ? error.name : "UnknownError",
       });
+      batchItemFailures.push({ itemIdentifier: record.messageId });
     }
   }
-
-  return { batchItemFailures: failures };
+  return { batchItemFailures };
 }
 
 async function processRecord(record: SQSRecord): Promise<void> {
-  const message = parseMessage(record.body);
-  const job = await getJob(message.customerId, message.jobId);
-  if (!job || job.deleted) {
-    logWarn("transcription_start_job_missing", {
-      customerId: message.customerId,
-      jobId: message.jobId
-    });
-    return;
-  }
-
-  if (job.status !== "QUEUED" && job.status !== "STARTING") {
-    logInfo("transcription_start_skipped", {
-      customerId: job.customerId,
-      jobId: job.jobId,
-      status: job.status
-    });
-    return;
-  }
-
-  const locked = await markJobStarting(job.customerId, job.jobId);
-  if (!locked) {
-    return;
-  }
-
+  const message = JSON.parse(record.body) as {
+    customerId: string;
+    jobId: string;
+  };
+  if (!message.customerId || !message.jobId)
+    throw new Error("Invalid start message");
+  let job = await getJob(message.customerId, message.jobId);
+  if (!job || !["QUEUED", "STARTING"].includes(job.status)) return;
+  if (!(await markJobStarting(job.customerId, job.jobId))) return;
   try {
+    if (job.meteringVersion === 2 && !job.usageReserved) {
+      const duration = await verifyAudio(job);
+      job = await reserveVerifiedUsage(job, duration);
+    }
     await startTranscribeJob({
-      customerId: job.customerId,
-      jobId: job.jobId,
-      transcribeJobName: job.transcribeJobName,
-      s3Key: job.s3Key,
-      fileName: job.fileName,
+      ...job,
+      s3Key: job.processingS3Key ?? job.s3Key,
       speakerCount: job.speakerCount ?? undefined,
-      transcriptJsonS3Key: job.transcriptJsonS3Key
     });
     await markJobInProgress(job.customerId, job.jobId);
-    logInfo("transcription_start_worker_started", {
-      customerId: job.customerId,
-      jobId: job.jobId,
-      transcribeJobName: job.transcribeJobName
-    });
   } catch (error) {
     if (error instanceof Error && error.name === "ConflictException") {
       await markJobInProgress(job.customerId, job.jobId);
       return;
     }
-
-    if (receiveCount(record) >= maxReceiveCount()) {
-      const reason = error instanceof Error ? error.message : "Amazon Transcribe failed to start";
-      const transitioned = await markJobFailed(job.customerId, job.jobId, reason);
-      if (transitioned) {
-        await releaseUsageReservation(job.customerId, job.usageMonth, job.reservedDurationSeconds);
-      }
-      logError("transcription_start_worker_exhausted", {
-        customerId: job.customerId,
-        jobId: job.jobId,
-        transcribeJobName: job.transcribeJobName
+    const permanent =
+      error instanceof ApiError ||
+      (error instanceof Error &&
+        [
+          "PreconditionFailed",
+          "NoSuchKey",
+          "UnsupportedFileTypeError",
+          "CouldNotDetermineFileTypeError",
+        ].includes(error.name));
+    const exhausted =
+      Number(record.attributes.ApproximateReceiveCount ?? "1") >=
+      Number(process.env.TRANSCRIPTION_START_MAX_RECEIVE_COUNT ?? "3");
+    if (permanent || exhausted) {
+      await finishJob(job, "FAILED", {
+        failureReason:
+          error instanceof ApiError
+            ? error.message
+            : permanent
+              ? "Uploaded audio could not be validated"
+              : "Transcription could not start after retries",
       });
       return;
     }
-
     throw error;
   }
-}
-
-function parseMessage(body: string): StartMessage {
-  const parsed = JSON.parse(body) as Partial<StartMessage>;
-  if (!parsed.customerId || !parsed.jobId) {
-    throw new Error("Invalid transcription start message");
-  }
-  return {
-    customerId: parsed.customerId,
-    jobId: parsed.jobId
-  };
-}
-
-function receiveCount(record: SQSRecord): number {
-  return Number(record.attributes.ApproximateReceiveCount ?? "1");
-}
-
-function maxReceiveCount(): number {
-  return Number(process.env.TRANSCRIPTION_START_MAX_RECEIVE_COUNT ?? "3");
 }

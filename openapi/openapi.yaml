@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: Super Transcriber API
-  version: 0.2.0
-  description: API-first transcription backend for private S3 uploads, asynchronous jobs, self-serve billing, webhooks, and optional AI enrichment.
+  version: 1.0.0
+  description: Private MP3/M4A uploads, durable asynchronous transcription, TXT/JSON/SRT/VTT downloads, measured usage,
+    signed callbacks, customer API keys, and optional Stripe subscriptions.
 servers:
-  - url: https://api.example.com
+  - url: https://pn72sppog0.execute-api.us-east-1.amazonaws.com
 security:
   - ApiKeyAuth: []
 paths:
@@ -15,6 +16,7 @@ paths:
       responses:
         "200":
           description: Service health
+      operationId: get
   /health:
     get:
       security: []
@@ -22,14 +24,168 @@ paths:
       responses:
         "200":
           description: Service health
+      operationId: getHealth
   /v1/api-keys:
     post:
       security:
+        - ApiKeyAuth: []
         - AdminTokenAuth: []
-      summary: Create an API key
+        - AdminBearerAuth: []
+      summary: Create a scoped customer key, or provision an account as admin
       responses:
         "201":
           description: Created API key. Plaintext key is returned once.
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyName:
+                  type: string
+                customerId:
+                  type: string
+                  description: Admin only
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - uploads:write
+                      - transcriptions:write
+                      - transcriptions:read
+                      - transcriptions:delete
+                      - keys:manage
+                      - billing:read
+                      - billing:write
+                      - webhooks:manage
+      operationId: postV1ApiKeys
+    get:
+      summary: List customer API-key metadata; hashes and plaintext are excluded
+      parameters: &a1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Keys and nextCursor
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: getV1ApiKeys
   /v1/billing/checkout:
     post:
       security: []
@@ -43,13 +199,124 @@ paths:
       responses:
         "200":
           description: Checkout session URL and claim token
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: postV1BillingCheckout
   /v1/billing/webhook:
     post:
-      security: []
+      security:
+        - StripeSignatureAuth: []
       summary: Stripe webhook receiver
       responses:
         "200":
           description: Webhook accepted
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: postV1BillingWebhook
   /v1/billing/claim:
     post:
       security: []
@@ -63,12 +330,124 @@ paths:
       responses:
         "201":
           description: API key created for paid checkout session
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description: Checkout receipts expire after 24 hours. recover:true replaces the previously claimed key after checking an
+        active subscription. Keep claimToken secret.
+      operationId: postV1BillingClaim
   /v1/billing/account:
     get:
       summary: Get authenticated customer billing status and limits
       responses:
         "200":
           description: Billing account status
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: getV1BillingAccount
   /v1/billing/portal:
     post:
       summary: Create a Stripe Billing Portal session
@@ -81,6 +460,61 @@ paths:
       responses:
         "200":
           description: Billing portal URL
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: postV1BillingPortal
   /v1/uploads/presign:
     post:
       summary: Create a private S3 upload URL
@@ -97,6 +531,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PresignUploadResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: postV1UploadsPresign
   /v1/transcriptions:
     post:
       summary: Queue an asynchronous transcription job
@@ -113,6 +602,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreateTranscriptionResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      description: Submitting the same uploaded s3Key with the same speaker/language settings returns the existing job.
+        Changed settings return 409. Workers verify media and monthly capacity before starting Transcribe; validation or
+        quota failures produce a FAILED job. sourceUrl returns 501.
+      operationId: postV1Transcriptions
     get:
       summary: List recent transcription jobs
       parameters:
@@ -129,11 +676,72 @@ paths:
       responses:
         "200":
           description: Paginated job list
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: getV1Transcriptions
   /v1/transcriptions/{jobId}:
     get:
       summary: Get transcription status and transcript output
       parameters:
         - $ref: "#/components/parameters/JobId"
+        - name: includeTranscript
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: false polls metadata without reading transcript S3 objects
       responses:
         "200":
           description: Job status and transcript when complete
@@ -141,6 +749,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TranscriptionJob"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: getV1TranscriptionsJobId
     delete:
       summary: Soft delete a transcription job
       parameters:
@@ -148,6 +811,61 @@ paths:
       responses:
         "204":
           description: Job soft deleted
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: deleteV1TranscriptionsJobId
   /v1/webhooks:
     post:
       summary: Configure the default completion webhook
@@ -160,6 +878,473 @@ paths:
       responses:
         "200":
           description: Webhook configuration. Signing secret is returned only when first created.
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: postV1Webhooks
+  /v1/api-keys/{keyId}:
+    delete:
+      summary: Revoke a customer key
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Disabled key confirmation
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: deleteV1ApiKeysKeyId
+  /v1/api-keys/{keyId}/rotate:
+    post:
+      summary: Atomically replace a key and revoke the old key
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Replacement plaintext key returned once
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: postV1ApiKeysKeyIdRotate
+  /v1/transcriptions/{jobId}/transcript:
+    get:
+      summary: Download transcript as TXT, normalized JSON, SRT, or VTT
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum:
+              - txt
+              - json
+              - srt
+              - vtt
+            default: txt
+      responses:
+        "200":
+          description: Transcript attachment
+          content:
+            text/plain:
+              schema:
+                type: string
+            text/vtt:
+              schema:
+                type: string
+            application/x-subrip:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NormalizedTranscript"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: getV1TranscriptionsJobIdTranscript
+  /v1/transcriptions/{jobId}/data:
+    delete:
+      summary: Permanently purge terminal job data after the upload URL expires
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "204":
+          description: Audio, transcripts, enrichment, job metadata, and Transcribe record removed
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: deleteV1TranscriptionsJobIdData
+  /v1/webhooks/deliveries:
+    get:
+      summary: List webhook delivery attempts retained for 30 days
+      parameters: *a1
+      responses:
+        "200":
+          description: Deliveries and nextCursor
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: getV1WebhooksDeliveries
+  /v1/webhooks/deliveries/{eventId}/replay:
+    post:
+      summary: Replay an owned delivery using its stable event id
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Replay queued
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or billing restriction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Owned resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Job or receipt conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Transcript retention expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate or usage limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Optional feature is not configured or implemented
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      operationId: postV1WebhooksDeliveriesEventIdReplay
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -167,8 +1352,16 @@ components:
       in: header
       name: x-api-key
     AdminTokenAuth:
+      type: apiKey
+      in: header
+      name: x-admin-token
+    AdminBearerAuth:
       type: http
       scheme: bearer
+    StripeSignatureAuth:
+      type: apiKey
+      in: header
+      name: stripe-signature
   parameters:
     JobId:
       name: jobId
@@ -189,21 +1382,32 @@ components:
         - FAILED
     PresignUploadRequest:
       type: object
-      required: [fileName, contentType, fileSizeBytes]
+      required:
+        - fileName
+        - contentType
+        - fileSizeBytes
       properties:
         fileName:
           type: string
-          examples: [meeting.mp3]
+          examples:
+            - meeting.mp3
         contentType:
           type: string
-          examples: [audio/mpeg]
+          examples:
+            - audio/mpeg
         fileSizeBytes:
           type: integer
           minimum: 1
           maximum: 209715200
     PresignUploadResponse:
       type: object
-      required: [uploadUrl, uploadMethod, uploadHeaders, jobId, s3Key, expiresInSeconds]
+      required:
+        - uploadUrl
+        - uploadMethod
+        - uploadHeaders
+        - jobId
+        - s3Key
+        - expiresInSeconds
       properties:
         uploadUrl:
           type: string
@@ -235,29 +1439,44 @@ components:
         durationSeconds:
           type: integer
           minimum: 1
-          maximum: 1200
+          description: Optional advisory hint; the worker measures actual audio duration.
         speakerCount:
           type: integer
           minimum: 1
           maximum: 10
+        languageCode:
+          type: string
+          examples:
+            - en-US
+          description: Amazon Transcribe supported language code; defaults to deployment configuration.
       oneOf:
-        - required: [s3Key]
-        - required: [sourceUrl]
+        - required:
+            - s3Key
+        - required:
+            - sourceUrl
     CreateTranscriptionResponse:
       type: object
-      required: [jobId, status, pollUrl]
+      required:
+        - jobId
+        - status
+        - pollUrl
       properties:
         jobId:
           type: string
           format: uuid
         status:
-          type: string
-          const: QUEUED
+          $ref: "#/components/schemas/JobStatus"
         pollUrl:
           type: string
     TranscriptionJob:
       type: object
-      required: [jobId, status, fileName, wordCount, createdAt, updatedAt]
+      required:
+        - jobId
+        - status
+        - fileName
+        - wordCount
+        - createdAt
+        - updatedAt
       properties:
         jobId:
           type: string
@@ -268,7 +1487,7 @@ components:
           type: string
         durationSeconds:
           type:
-            - integer
+            - number
             - "null"
         wordCount:
           type: integer
@@ -288,9 +1507,12 @@ components:
         updatedAt:
           type: string
           format: date-time
+        languageCode:
+          type: string
     ConfigureWebhookRequest:
       type: object
-      required: [url]
+      required:
+        - url
       properties:
         url:
           type: string
@@ -299,39 +1521,132 @@ components:
           type: array
           items:
             type: string
-            enum: [transcription.completed, transcription.failed]
+            enum:
+              - transcription.completed
+              - transcription.failed
         enabled:
           type: boolean
     CreateCheckoutRequest:
       type: object
-      required: [email, planId]
+      required:
+        - email
+        - planId
       properties:
         email:
           type: string
           format: email
         planId:
           type: string
-          examples: [starter]
+          examples:
+            - starter
         successUrl:
           type: string
           format: uri
-          description: Optional. Defaults to the API Gateway health URL, with checkout placeholders added.
+          description: Optional; defaults to the configured hosted receipt page.
         cancelUrl:
           type: string
           format: uri
           description: Optional. Defaults to the API Gateway health URL.
     ClaimCheckoutRequest:
       type: object
-      required: [checkoutSessionId, claimToken]
+      required:
+        - checkoutSessionId
+        - claimToken
       properties:
         checkoutSessionId:
           type: string
         claimToken:
           type: string
+        recover:
+          type: boolean
+          default: false
     BillingPortalRequest:
       type: object
-      required: [returnUrl]
+      required:
+        - returnUrl
       properties:
         returnUrl:
           type: string
           format: uri
+    Error:
+      type: object
+      required:
+        - success
+        - error
+        - code
+      properties:
+        success:
+          const: false
+        error:
+          type: string
+        code:
+          type: string
+    NormalizedTranscript:
+      type: object
+      required:
+        - jobId
+        - transcriptText
+        - wordCount
+        - words
+        - segments
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        transcriptText:
+          type: string
+        wordCount:
+          type: integer
+        durationSeconds:
+          type:
+            - number
+            - "null"
+        languageCode:
+          type: string
+        segments:
+          type: array
+          items:
+            type: object
+            required:
+              - text
+              - start
+              - end
+              - speaker
+            properties:
+              text:
+                type: string
+              start:
+                type: number
+                minimum: 0
+              end:
+                type: number
+                minimum: 0
+              speaker:
+                type:
+                  - string
+                  - "null"
+        words:
+          type: array
+          items:
+            type: object
+            required:
+              - text
+              - start
+              - end
+              - speaker
+              - confidence
+            properties:
+              text:
+                type: string
+              start:
+                type: number
+              end:
+                type: number
+              speaker:
+                type:
+                  - string
+                  - "null"
+              confidence:
+                type:
+                  - number
+                  - "null"

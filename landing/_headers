@@ -1,0 +1,9 @@
+/*
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://pn72sppog0.execute-api.us-east-1.amazonaws.com https://*.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+/account
+  Cache-Control: no-store
+/billing
+  Cache-Control: no-store

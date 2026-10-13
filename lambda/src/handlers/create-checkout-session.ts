@@ -22,7 +22,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     const customerId = `cust_${randomBytes(8).toString("hex")}`;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const fallbackRedirectUrl = defaultRedirectUrl(event);
-    const successUrl = appendCheckoutPlaceholders(input.successUrl ?? fallbackRedirectUrl, claimToken);
+    const successUrl = appendCheckoutPlaceholders(input.successUrl ?? process.env.BILLING_SUCCESS_URL ?? fallbackRedirectUrl, claimToken);
     const cancelUrl = input.cancelUrl ?? fallbackRedirectUrl;
 
     const session = await stripe.checkout.sessions.create({

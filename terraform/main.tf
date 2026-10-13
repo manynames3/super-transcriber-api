@@ -27,6 +27,9 @@ locals {
   }
 
   lambda_environment = {
+    JOB_RETENTION_DAYS                    = tostring(var.transcript_retention_days)
+    API_KEY_REQUESTS_PER_MINUTE           = tostring(var.api_key_requests_per_minute)
+    BILLING_SUCCESS_URL                   = var.billing_success_url
     ADMIN_TOKEN_SECRET_ARN                = local.admin_token_secret_arn
     AI_ENRICHMENT_ENABLED                 = tostring(var.enable_ai_enrichment)
     AI_ENRICHMENT_MAX_CHARS               = tostring(var.ai_enrichment_max_chars)
@@ -56,6 +59,36 @@ locals {
   }
 
   lambda_functions = {
+    download-transcript = {
+      filename    = "${path.module}/../lambda/dist/zips/download-transcript.zip"
+      memory_size = 256
+      timeout     = 15
+    }
+    manage-api-keys = {
+      filename    = "${path.module}/../lambda/dist/zips/manage-api-keys.zip"
+      memory_size = 128
+      timeout     = 15
+    }
+    purge-transcription = {
+      filename    = "${path.module}/../lambda/dist/zips/purge-transcription.zip"
+      memory_size = 128
+      timeout     = 30
+    }
+    webhook-deliveries = {
+      filename    = "${path.module}/../lambda/dist/zips/webhook-deliveries.zip"
+      memory_size = 128
+      timeout     = 15
+    }
+    dispatch-outbox = {
+      filename    = "${path.module}/../lambda/dist/zips/dispatch-outbox.zip"
+      memory_size = 128
+      timeout     = 30
+    }
+    reconcile-jobs = {
+      filename    = "${path.module}/../lambda/dist/zips/reconcile-jobs.zip"
+      memory_size = 256
+      timeout     = 60
+    }
     health = {
       filename    = "${path.module}/../lambda/dist/zips/health.zip"
       memory_size = 128
@@ -108,8 +141,8 @@ locals {
     }
     start-transcription = {
       filename    = "${path.module}/../lambda/dist/zips/start-transcription.zip"
-      memory_size = 256
-      timeout     = 60
+      memory_size = 512
+      timeout     = 240
     }
     get-transcription = {
       filename    = "${path.module}/../lambda/dist/zips/get-transcription.zip"

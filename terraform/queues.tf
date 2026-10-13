@@ -7,7 +7,7 @@ resource "aws_sqs_queue" "transcription_start_dlq" {
 
 resource "aws_sqs_queue" "transcription_start" {
   name                       = "${local.name_prefix}-transcription-start"
-  visibility_timeout_seconds = 360
+  visibility_timeout_seconds = 1440
   message_retention_seconds  = 345600
   receive_wait_time_seconds  = 20
   sqs_managed_sse_enabled    = true

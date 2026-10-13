@@ -16,12 +16,13 @@ export interface StartTranscribeInput {
   fileName: string;
   speakerCount?: number;
   transcriptJsonS3Key: string;
+  languageCode?: string;
 }
 
 export async function startTranscribeJob(input: StartTranscribeInput): Promise<void> {
   const uploadBucket = requireEnv("UPLOAD_BUCKET");
   const transcriptBucket = requireEnv("TRANSCRIPT_BUCKET");
-  const languageCode = process.env.DEFAULT_LANGUAGE_CODE ?? "en-US";
+  const languageCode = input.languageCode ?? process.env.DEFAULT_LANGUAGE_CODE ?? "en-US";
 
   await client.send(
     new StartTranscriptionJobCommand({
@@ -34,8 +35,8 @@ export async function startTranscribeJob(input: StartTranscribeInput): Promise<v
       OutputBucketName: transcriptBucket,
       OutputKey: input.transcriptJsonS3Key,
       Settings: {
-        ShowSpeakerLabels: true,
-        MaxSpeakerLabels: input.speakerCount ?? 2
+        ShowSpeakerLabels: input.speakerCount !== 1,
+        ...(input.speakerCount === 1 ? {} : { MaxSpeakerLabels: input.speakerCount ?? 2 })
       }
     })
   );

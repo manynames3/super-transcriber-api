@@ -68,7 +68,7 @@
 
           <article class="endpoint" id="api-keys">
             <div class="method-line"><span class="method post">POST</span><code>/v1/api-keys</code></div>
-            <p>Admin-only API-key creation route. Plaintext keys are returned once and stored only as SHA-256 hashes.</p>
+            <p>Admin provisioning or authenticated customer key creation with scoped permissions. Plaintext keys are returned once and stored only as SHA-256 hashes.</p>
             <pre class="inline-code"><code>{
   "customerName": "Acme Dev",
   "keyName": "Production key",
@@ -81,6 +81,14 @@
 }</code></pre>
           </article>
 
+          <article class="endpoint">
+            <div class="method-line"><span class="method get">GET</span><code>/v1/api-keys</code></div>
+            <p>Lists customer key metadata with cursor pagination; requires keys:manage.</p>
+            <div class="method-line"><span class="method post">POST</span><code>/v1/api-keys/{keyId}/rotate</code></div>
+            <p>Returns a replacement key once and immediately revokes the previous value.</p>
+            <div class="method-line"><span class="method delete">DELETE</span><code>/v1/api-keys/{keyId}</code></div>
+            <p>Revokes an owned key.</p>
+          </article>
           <article class="endpoint" id="uploads">
             <div class="method-line"><span class="method post">POST</span><code>/v1/uploads/presign</code></div>
             <p>Creates a private presigned S3 upload URL for MP3 or M4A files up to 200 MB.</p>
@@ -93,7 +101,7 @@
   "uploadUrl": "https://...",
   "uploadMethod": "PUT",
   "jobId": "2d1d7a53-9f34-40d3-9d2a-839bfb29d821",
-  "s3Key": "customers/cust_123/uploads/2d1d7a53/meeting.mp3",
+  "s3Key": "customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3",
   "expiresInSeconds": 900
 }</code></pre>
           </article>
@@ -102,7 +110,7 @@
             <div class="method-line"><span class="method post">POST</span><code>/v1/transcriptions</code></div>
             <p>Queues an asynchronous transcription job from an owned S3 key. `sourceUrl` returns `501 NOT_IMPLEMENTED` in v1.</p>
             <pre class="inline-code"><code>{
-  "s3Key": "customers/cust_123/uploads/job_123/meeting.mp3",
+  "s3Key": "customers/cust_123/uploads/2d1d7a53-9f34-40d3-9d2a-839bfb29d821/meeting.mp3",
   "fileName": "meeting.mp3",
   "durationSeconds": 600,
   "speakerCount": 2
@@ -122,6 +130,10 @@
 
             <div class="method-line"><span class="method delete">DELETE</span><code>/v1/transcriptions/{jobId}</code></div>
             <p>Soft deletes a job so it no longer appears in normal customer views.</p>
+            <div class="method-line"><span class="method get">GET</span><code>/v1/transcriptions/{jobId}/transcript?format=txt</code></div>
+            <p>Downloads TXT, normalized JSON, SRT, or VTT with speaker/timing output. Use includeTranscript=false on status polling to avoid reading large outputs.</p>
+            <div class="method-line"><span class="method delete">DELETE</span><code>/v1/transcriptions/{jobId}/data</code></div>
+            <p>Permanently purges eligible job data after processing and upload URL expiry.</p>
           </article>
 
           <article class="endpoint" id="webhooks">
@@ -133,6 +145,12 @@
 }</code></pre>
           </article>
 
+          <article class="endpoint">
+            <div class="method-line"><span class="method get">GET</span><code>/v1/webhooks/deliveries</code></div>
+            <p>Lists retained delivery attempts with stable event IDs.</p>
+            <div class="method-line"><span class="method post">POST</span><code>/v1/webhooks/deliveries/{eventId}/replay</code></div>
+            <p>Queues an owned callback again. Receivers verify HMAC and deduplicate the stable event ID.</p>
+          </article>
           <article class="endpoint" id="billing">
             <div class="method-line"><span class="method post">POST</span><code>/v1/billing/checkout</code></div>
             <p>Creates an optional Stripe Checkout session for a configured paid plan.</p>
@@ -142,10 +160,10 @@
 }</code></pre>
 
             <div class="method-line"><span class="method post">POST</span><code>/v1/billing/claim</code></div>
-            <p>Verifies a paid Checkout session and returns the plaintext API key once.</p>
+            <p>Verifies an active paid subscription and returns a key once. Within the 24-hour receipt window, recover:true replaces a lost receipt-issued key.</p>
 
             <div class="method-line"><span class="method get">GET</span><code>/v1/billing/account</code></div>
-            <p>Returns the authenticated customer's billing status and enforced limits.</p>
+            <p>Returns billing status, limits, active jobs, and used/reserved/remaining monthly minutes.</p>
 
             <div class="method-line"><span class="method post">POST</span><code>/v1/billing/portal</code></div>
             <p>Creates a Stripe Billing Portal session for subscription management.</p>

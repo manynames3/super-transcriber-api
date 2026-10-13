@@ -1,6 +1,6 @@
 # Validation Evidence
 
-This file records validation commands for the initial repository baseline.
+This file records executed validation checks. Earlier sections are historical baselines; the latest release evidence is below.
 
 | Command | Result |
 | --- | --- |
@@ -57,3 +57,37 @@ This file records validation commands for the initial repository baseline.
 | `git diff --check` | Passed. |
 
 Additional hardening in this pass: checkout redirect URLs are optional so API Gateway can be used before a custom domain exists, Stripe subscription updates map plan ids from configured price ids, and abandoned checkout session records use DynamoDB TTL cleanup.
+
+## Version 1.0.0 Release: October 13, 2026
+
+| Check | Observed result |
+| --- | --- |
+| Lambda `npm ci`, `npm run build`, `npm test` | Passed. 14 files, 47 tests. Includes worker leases, quota settlement, outbox retry, media parsing, key scopes, downloads, purge, webhook safety, and billing receipt/event regression tests. |
+| Lambda `npm run bundle` | Passed. 23 handlers bundled for Node.js 24, arm64; deployed through Terraform. |
+| Lambda and SDK `npm audit` | Both reported zero vulnerabilities. |
+| SDK `npm test` | Passed. Six tests for upload/polling, retries, typed failures, cancellation, and webhook verification. |
+| SDK `npm pack` | Passed. Release tarball contains compiled JavaScript, type declarations, package metadata, and documentation. |
+| `node scripts/check-contract.mjs` | Passed. OpenAPI matches all 21 Terraform routes; references, operation IDs, and path parameters validated. |
+| Terraform initialization and formatting | Passed. AWS provider locked to 6.68.0; native S3 state locking enabled for the hosted stack. |
+| `terraform validate`, `terraform test` | Valid configuration; four mock-provider tests passed. Provider deprecation warnings remain for existing DynamoDB key arguments and region-name attributes. |
+| Checkov 3.3.28 with `.checkov.yml` | 371 passed, zero failed, zero parsing errors. The documented cost/privacy exceptions are excluded by configuration, not silently treated as passes. |
+| `git diff --check` | Passed. |
+
+### Live AWS And Browser Checks
+
+The existing API Gateway ID, DynamoDB table, and media buckets were adopted into encrypted remote Terraform state without deleting or replacing them. Terraform applied the backend updates successfully. `/health` reported version `1.0.0`, billing disabled, and TXT/JSON/SRT/VTT capabilities.
+
+Two synthetic speech samples completed through private upload, durable queue admission, verified media parsing, Amazon Transcribe, EventBridge completion, and transcript retrieval:
+
+| Input | Measured duration | Observed upload-to-completion time | Outputs verified |
+| --- | --- | --- | --- |
+| MP3 | 6.984 seconds | 23.217 seconds | Nonempty TXT, normalized JSON, SRT, VTT |
+| M4A | 6.972 seconds | 7.530 seconds | Nonempty TXT, normalized JSON, SRT, VTT |
+
+The caller supplied an incorrect one-second duration hint. Usage still recorded 14 whole seconds for the two samples, zero reserved seconds, and zero active jobs after completion. Separate live assertions verified cross-customer denial, read-only scope enforcement, rotation/revocation, rejection of audio above a one-second account limit, and release of failed-job reservations. A retained job from an interrupted worker attempt was replayed successfully, then permanently purged after its upload URL expired: deletion returned 204 and subsequent retrieval returned 404.
+
+The deployed Cloudflare account page connected to the live API, displayed the completed jobs and usage, downloaded a TXT attachment, and disconnected successfully. DOM/layout checks at 1440px and 390px widths found no page-level horizontal overflow; compact section headings consistently measured 20px. API keys were not stored in localStorage. Browser screenshot capture was unavailable, so no screenshot-based visual verification is claimed.
+
+### Boundaries Of This Evidence
+
+These are small synthetic smoke tests, not a load test, accuracy benchmark, SLA, or production-traffic claim. Stripe recovery and subscription logic have mocked regression coverage; live payments remain untested and disabled until Stripe secret references and price IDs are configured. Bedrock enrichment is disabled and was not invoked. Source URL ingestion intentionally returns 501. The sub-$3 idle budget is a design target, not a measured monthly bill.

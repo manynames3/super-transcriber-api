@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { basename } from "node:path";
 import { ApiError, badRequest } from "./errors.js";
+import { isIP } from "node:net";
 
 export const DEFAULT_MAX_FILE_SIZE_BYTES = 200 * 1024 * 1024;
 export const DEFAULT_MAX_DURATION_SECONDS = 20 * 60;
@@ -36,6 +37,7 @@ export interface CreateTranscriptionRequest {
   fileName?: string;
   durationSeconds?: number;
   speakerCount?: number;
+  languageCode?: string;
 }
 
 export interface ConfigureWebhookRequest {
@@ -54,6 +56,7 @@ export interface CreateCheckoutRequest {
 export interface ClaimCheckoutRequest {
   checkoutSessionId: string;
   claimToken: string;
+  recover?: boolean;
 }
 
 export interface BillingPortalRequest {
@@ -89,12 +92,16 @@ export function getLimitConfigFromEnv(): LimitConfig {
 }
 
 export function mergeLimitConfig(defaults: LimitConfig, overrides?: Partial<LimitConfig>): LimitConfig {
-  return {
+  const merged = {
     maxActiveJobs: overrides?.maxActiveJobs ?? defaults.maxActiveJobs,
     maxFileSizeBytes: overrides?.maxFileSizeBytes ?? defaults.maxFileSizeBytes,
     maxDurationSeconds: overrides?.maxDurationSeconds ?? defaults.maxDurationSeconds,
     monthlyTranscriptionMinutes: overrides?.monthlyTranscriptionMinutes ?? defaults.monthlyTranscriptionMinutes
   };
+  if (Object.values(merged).some(value => !Number.isSafeInteger(value) || value <= 0) || merged.maxFileSizeBytes > DEFAULT_MAX_FILE_SIZE_BYTES) {
+    throw badRequest("Usage limits must be positive integers; files cannot exceed 200 MB", "INVALID_LIMITS");
+  }
+  return merged;
 }
 
 export function sanitizeFileName(fileName: string): string {
@@ -128,6 +135,8 @@ export function validateCreateTranscriptionRequest(input: unknown, limits: Limit
   const sourceUrl = optionalString(record, "sourceUrl");
   const durationSeconds = optionalPositiveInteger(record, "durationSeconds");
   const speakerCount = optionalPositiveInteger(record, "speakerCount");
+  const languageCode = optionalString(record, "languageCode");
+  if (languageCode && !/^[a-z]{2,3}-[A-Z]{2}$/.test(languageCode)) throw badRequest("languageCode must be an Amazon Transcribe language code such as en-US", "INVALID_LANGUAGE");
 
   if ((s3Key && sourceUrl) || (!s3Key && !sourceUrl)) {
     throw badRequest("Provide exactly one of s3Key or sourceUrl", "INVALID_SOURCE");
@@ -150,7 +159,8 @@ export function validateCreateTranscriptionRequest(input: unknown, limits: Limit
     s3Key,
     sourceUrl,
     durationSeconds,
-    speakerCount
+    speakerCount,
+    languageCode
   };
 }
 
@@ -164,10 +174,6 @@ export function assertDuration(durationSeconds: number | undefined, maxDurationS
   if (durationSeconds !== undefined && durationSeconds > maxDurationSeconds) {
     throw badRequest(`durationSeconds exceeds the ${maxDurationSeconds} second limit`, "DURATION_TOO_LONG");
   }
-}
-
-export function reservedDurationSeconds(durationSeconds: number | undefined, maxDurationSeconds: number): number {
-  return durationSeconds ?? maxDurationSeconds;
 }
 
 export function parseOwnedUploadS3Key(
@@ -267,7 +273,8 @@ export function validateClaimCheckoutRequest(input: unknown): ClaimCheckoutReque
   const record = asRecord(input);
   return {
     checkoutSessionId: requireString(record, "checkoutSessionId"),
-    claimToken: requireString(record, "claimToken")
+    claimToken: requireString(record, "claimToken"),
+    recover: record.recover === true
   };
 }
 
@@ -289,7 +296,7 @@ function assertAllowedAudio(fileName: string, contentType?: string): void {
   }
 }
 
-function parseWebhookUrl(value: string): URL {
+export function parseWebhookUrl(value: string): URL {
   let parsed: URL;
   try {
     parsed = new URL(value);
@@ -297,11 +304,23 @@ function parseWebhookUrl(value: string): URL {
     throw badRequest("url must be a valid URL", "INVALID_WEBHOOK_URL");
   }
 
-  const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-  if (parsed.protocol !== "https:" && !(isLocalhost && parsed.protocol === "http:")) {
-    throw badRequest("Webhook url must use https, except localhost for development", "INVALID_WEBHOOK_URL");
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || (parsed.port && parsed.port !== "443") || hostname === "localhost" || hostname.endsWith(".local") || (isIP(hostname) && !isPublicAddress(hostname))) {
+    throw badRequest("Webhook URL must use HTTPS on a public host without credentials", "INVALID_WEBHOOK_URL");
   }
   return parsed;
+}
+
+export function isPublicAddress(address: string): boolean {
+  if (isIP(address) === 4) {
+    const [a, b, c] = address.split(".").map(Number);
+    return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 168 || b === 0 || (b === 88 && c === 99))) ||
+      (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) || (a === 203 && b === 0 && c === 113));
+  }
+  if (isIP(address) === 6) return /^[23][0-9a-f]{3}:/i.test(address) && !/^2001:0?db8:/i.test(address);
+  return false;
 }
 
 function parseRedirectUrl(value: string): URL {

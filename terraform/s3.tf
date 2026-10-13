@@ -8,6 +8,17 @@ resource "aws_s3_bucket" "transcripts" {
   force_destroy = var.force_destroy_buckets
 }
 
+resource "aws_s3_bucket_cors_configuration" "uploads" {
+  bucket = aws_s3_bucket.uploads.id
+  cors_rule {
+    allowed_methods = ["PUT"]
+    allowed_origins = var.cors_allowed_origins
+    allowed_headers = ["content-type", "x-amz-*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 300
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "private" {
   for_each = {
     uploads     = aws_s3_bucket.uploads.id
@@ -89,10 +100,29 @@ resource "aws_s3_bucket_lifecycle_configuration" "transcripts" {
     expiration {
       days = var.transcript_retention_days
     }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
   }
 }
 
 data "aws_iam_policy_document" "uploads_bucket" {
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.uploads.arn, "${aws_s3_bucket.uploads.arn}/*"]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
   statement {
     sid = "AllowTranscribeReadUploads"
 
@@ -106,7 +136,8 @@ data "aws_iam_policy_document" "uploads_bucket" {
     ]
 
     resources = [
-      "${aws_s3_bucket.uploads.arn}/customers/*/uploads/*"
+      "${aws_s3_bucket.uploads.arn}/customers/*/uploads/*",
+      "${aws_s3_bucket.uploads.arn}/customers/*/processing/*"
     ]
 
     condition {
@@ -152,6 +183,21 @@ resource "aws_s3_bucket_policy" "uploads" {
 }
 
 data "aws_iam_policy_document" "transcripts_bucket" {
+  statement {
+    sid    = "DenyInsecureTransport"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.transcripts.arn, "${aws_s3_bucket.transcripts.arn}/*"]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
   statement {
     sid = "AllowTranscribeWriteTranscripts"
 

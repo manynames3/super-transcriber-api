@@ -6,6 +6,7 @@ import { getEnrichmentRecord, requireVisibleJob } from "../shared/dynamodb.js";
 import { internalError } from "../shared/errors.js";
 import { errorResponse, jsonResponse, logInfo } from "../shared/response.js";
 import { summarizeTranscript } from "../shared/transcript-format.js";
+import { readTranscript } from "../shared/transcript-storage.js";
 
 const s3 = new S3Client({});
 
@@ -23,22 +24,24 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       status: job.status,
       fileName: job.fileName,
       durationSeconds: job.durationSeconds,
+      languageCode: job.languageCode ?? process.env.DEFAULT_LANGUAGE_CODE ?? "en-US",
       wordCount: job.wordCount,
       failureReason: job.failureReason,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       links: {
-        self: `/v1/transcriptions/${job.jobId}`
+        self: `/v1/transcriptions/${job.jobId}`,
+        transcript: `/v1/transcriptions/${job.jobId}/transcript?format=txt`
       }
     };
 
-    if (job.status === "COMPLETED") {
+    if (job.status === "COMPLETED" && event.queryStringParameters?.includeTranscript !== "false") {
       const transcriptBucket = process.env.TRANSCRIPT_BUCKET;
       if (!transcriptBucket) {
         throw internalError("Transcript bucket is not configured");
       }
 
-      const payload = await readJsonObject(transcriptBucket, job.transcriptJsonS3Key);
+      const payload = await readTranscript(job);
       const summary = summarizeTranscript(payload);
       body.transcriptText = summary.transcriptText;
       body.wordCount = summary.wordCount;
@@ -74,16 +77,4 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   } catch (error) {
     return errorResponse(error);
   }
-}
-
-async function readJsonObject(bucket: string, key: string): Promise<unknown> {
-  const result = await s3.send(
-    new GetObjectCommand({
-      Bucket: bucket,
-      Key: key
-    })
-  );
-
-  const text = await result.Body?.transformToString();
-  return text ? JSON.parse(text) : {};
 }

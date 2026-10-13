@@ -1,17 +1,17 @@
-# 005 Durable Queue Workers
+# 005: Durable Queues And Transactional Event Delivery
 
 ## Status
 
-Accepted
+Accepted; extended for the 1.0.0 release.
 
 ## Context
 
-Starting Amazon Transcribe inline during `POST /v1/transcriptions` couples customer API latency and reliability to an external AWS service call. Enterprise users need explicit lifecycle states, retryable work, and DLQs.
+Starting Transcribe or sending a callback directly after a database update can lose work when the process fails between those operations. SQS and EventBridge may also redeliver events.
 
 ## Decision
 
-Use SQS-backed workers for side effects after request acceptance. The API writes `QUEUED` and sends a message to `transcription-start`. A worker Lambda transitions the job to `STARTING`, starts Amazon Transcribe, writes the Transcribe mapping, and then transitions to `IN_PROGRESS`. Webhook delivery and optional enrichment also use SQS queues with DLQs.
+Use SQS workers for starts, callbacks, and optional enrichment. Record start and terminal event intent in a DynamoDB outbox in the same transaction as job/capacity/usage changes. Dispatch filtered stream records, retain stable event IDs, use worker leases, and reconcile stale jobs/pending events hourly. Handle EventBridge delivery failures and Lambda execution failures through a completion DLQ.
 
 ## Consequences
 
-The API can return `202` quickly and reliably. Failed starts, webhook delivery failures, and enrichment failures are replayable from queues or DLQs. The system adds more Lambda functions and IAM roles, but keeps the cost-first serverless model and avoids always-on workers.
+Accepted work survives interrupted queue delivery. Terminal usage cannot be settled twice. At-least-once callbacks still require customer deduplication. The additional stream dispatcher and bounded recovery calls create small usage charges, with no always-on compute. A paused development worker does not complete jobs until resumed.

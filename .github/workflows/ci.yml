@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: lambda/package-lock.json
 
@@ -46,9 +46,16 @@ jobs:
         working-directory: sdk/typescript
         run: npm ci
 
-      - name: Build TypeScript SDK
+      - name: SDK tests
         working-directory: sdk/typescript
-        run: npm run build
+        run: npm test
+
+      - name: API contract check
+        run: node scripts/check-contract.mjs
+
+      - name: Package SDK
+        working-directory: sdk/typescript
+        run: npm pack --dry-run
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -71,8 +78,8 @@ jobs:
       - name: IaC security scan
         run: |
           python -m pip install --upgrade pip
-          pip install checkov
-          checkov -d terraform --quiet --soft-fail
+          pip install checkov==3.3.28
+          checkov -d terraform --config-file .checkov.yml
 
       - name: Whitespace check
         run: git diff --check

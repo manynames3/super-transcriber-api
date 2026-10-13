@@ -7,7 +7,7 @@ import {
   TransactWriteCommand,
   UpdateCommand
 } from "@aws-sdk/lib-dynamodb";
-import { notFound, quotaExceeded } from "./errors.js";
+import { notFound } from "./errors.js";
 import type { LimitConfig } from "./validation.js";
 
 export type JobStatus = "PENDING_UPLOAD" | "QUEUED" | "STARTING" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
@@ -25,6 +25,7 @@ export interface ApiKeyRecord {
   name: string;
   status: "ACTIVE" | "DISABLED";
   limits?: Partial<LimitConfig>;
+  scopes?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +43,8 @@ export interface CustomerRecord {
   billingStatus?: "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED" | "UNPAID" | "MANUAL";
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
+  limits?: LimitConfig;
+  billingEventCreated?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,6 +88,19 @@ export interface JobRecord {
   transcribeJobName: string;
   transcriptJsonS3Key: string;
   usageMonth: string;
+  meteringVersion?: number;
+  capacityReserved?: boolean;
+  usageReserved?: boolean;
+  requestHash?: string;
+  createdKeyId?: string;
+  limits?: LimitConfig;
+  uploadETag?: string;
+  processingS3Key?: string;
+  uploadExpiresAt?: string;
+  contentType?: string;
+  fileSizeBytes?: number;
+  ttlEpochSeconds?: number;
+  languageCode?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,6 +138,7 @@ export interface TranscribeMappingRecord {
   customerId: string;
   jobId: string;
   transcribeJobName: string;
+  ttlEpochSeconds?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -132,9 +149,9 @@ if (!configuredTableName && process.env.NODE_ENV !== "test") {
   throw new Error("TABLE_NAME is required");
 }
 
-const tableName = configuredTableName ?? "test-table";
+export const tableName = configuredTableName ?? "test-table";
 
-const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+export const client = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: {
     removeUndefinedValues: true
   }
@@ -175,7 +192,8 @@ export async function createCustomerAndApiKey(customer: CustomerRecord, apiKey: 
         {
           Put: {
             TableName: tableName,
-            Item: customer
+            Item: customer,
+            ConditionExpression: "attribute_not_exists(PK)"
           }
         },
         {
@@ -197,7 +215,8 @@ export async function getCustomer(customerId: string): Promise<CustomerRecord | 
       Key: {
         PK: customerPk(customerId),
         SK: "METADATA"
-      }
+      },
+      ConsistentRead: true
     })
   );
 
@@ -312,6 +331,7 @@ export async function updateCustomerBillingByStripeCustomer(fields: {
   billingStatus: CustomerRecord["billingStatus"];
   planId?: string;
   stripeSubscriptionId?: string | null;
+  eventCreated?: number;
 }): Promise<void> {
   const result = await client.send(
     new QueryCommand({
@@ -329,7 +349,7 @@ export async function updateCustomerBillingByStripeCustomer(fields: {
     return;
   }
 
-  await client.send(
+  try { await client.send(
     new UpdateCommand({
       TableName: tableName,
       Key: {
@@ -337,15 +357,17 @@ export async function updateCustomerBillingByStripeCustomer(fields: {
         SK: "METADATA"
       },
       UpdateExpression:
-        "SET billingStatus = :billingStatus, planId = :planId, stripeSubscriptionId = :stripeSubscriptionId, updatedAt = :updatedAt",
+        "SET billingStatus = :billingStatus, planId = :planId, stripeSubscriptionId = :stripeSubscriptionId, billingEventCreated = :eventCreated, updatedAt = :updatedAt",
+      ConditionExpression: "attribute_not_exists(billingEventCreated) OR billingEventCreated <= :eventCreated",
       ExpressionAttributeValues: {
+        ":eventCreated": fields.eventCreated ?? Math.floor(Date.now() / 1000),
         ":billingStatus": fields.billingStatus,
         ":planId": fields.planId ?? customer.planId ?? "unknown",
         ":stripeSubscriptionId": fields.stripeSubscriptionId ?? customer.stripeSubscriptionId ?? null,
         ":updatedAt": nowIso()
       }
     })
-  );
+  ); } catch (error) { if (!(error instanceof Error && error.name === "ConditionalCheckFailedException")) throw error; }
 }
 
 export async function putJobAndMapping(job: JobRecord, mapping: TranscribeMappingRecord): Promise<void> {
@@ -371,42 +393,6 @@ export async function putJobAndMapping(job: JobRecord, mapping: TranscribeMappin
   );
 }
 
-export async function markJobQueued(
-  customerId: string,
-  jobId: string,
-  fields: {
-    durationSeconds: number | null;
-    reservedDurationSeconds: number;
-    speakerCount: number | null;
-    usageMonth: string;
-  }
-): Promise<void> {
-  await client.send(
-    new UpdateCommand({
-      TableName: tableName,
-      Key: {
-        PK: customerPk(customerId),
-        SK: jobSk(jobId)
-      },
-      UpdateExpression:
-        "SET #status = :queued, durationSeconds = :durationSeconds, reservedDurationSeconds = :reservedDurationSeconds, speakerCount = :speakerCount, usageMonth = :usageMonth, updatedAt = :updatedAt",
-      ConditionExpression: "attribute_exists(PK) AND #status = :pending",
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
-      ExpressionAttributeValues: {
-        ":queued": "QUEUED",
-        ":pending": "PENDING_UPLOAD",
-        ":durationSeconds": fields.durationSeconds,
-        ":reservedDurationSeconds": fields.reservedDurationSeconds,
-        ":speakerCount": fields.speakerCount,
-        ":usageMonth": fields.usageMonth,
-        ":updatedAt": nowIso()
-      }
-    })
-  );
-}
-
 export async function getJob(customerId: string, jobId: string): Promise<JobRecord | null> {
   const result = await client.send(
     new GetCommand({
@@ -414,7 +400,8 @@ export async function getJob(customerId: string, jobId: string): Promise<JobReco
       Key: {
         PK: customerPk(customerId),
         SK: jobSk(jobId)
-      }
+      },
+      ConsistentRead: true
     })
   );
 
@@ -423,7 +410,7 @@ export async function getJob(customerId: string, jobId: string): Promise<JobReco
 
 export async function requireVisibleJob(customerId: string, jobId: string): Promise<JobRecord> {
   const job = await getJob(customerId, jobId);
-  if (!job || job.deleted) {
+  if (!job || job.deleted || (job.ttlEpochSeconds && job.ttlEpochSeconds <= Date.now() / 1000)) {
     throw notFound("Transcription job not found");
   }
   return job;
@@ -499,14 +486,16 @@ export async function markJobStarting(customerId: string, jobId: string): Promis
           PK: customerPk(customerId),
           SK: jobSk(jobId)
         },
-        UpdateExpression: "SET #status = :starting, updatedAt = :updatedAt",
-        ConditionExpression: "attribute_exists(PK) AND (#status = :queued OR #status = :starting)",
+      UpdateExpression: "SET #status = :starting, updatedAt = :updatedAt, leaseUntil = :lease",
+      ConditionExpression: "attribute_exists(PK) AND (#status = :queued OR (#status = :starting AND (attribute_not_exists(leaseUntil) OR leaseUntil < :now)))",
         ExpressionAttributeNames: {
           "#status": "status"
         },
         ExpressionAttributeValues: {
           ":starting": "STARTING",
           ":queued": "QUEUED",
+          ":lease": Math.floor(Date.now() / 1000) + 300,
+          ":now": Math.floor(Date.now() / 1000),
           ":updatedAt": updatedAt
         }
       })
@@ -543,73 +532,6 @@ export async function markJobInProgress(customerId: string, jobId: string): Prom
       }
     })
   );
-}
-
-export async function markJobCompleted(customerId: string, jobId: string, wordCount: number): Promise<boolean> {
-  const updatedAt = nowIso();
-  try {
-    await client.send(
-      new UpdateCommand({
-        TableName: tableName,
-        Key: {
-          PK: customerPk(customerId),
-          SK: jobSk(jobId)
-        },
-        UpdateExpression: "SET #status = :status, wordCount = :wordCount, failureReason = :failureReason, updatedAt = :updatedAt",
-        ConditionExpression: "attribute_exists(PK) AND #status <> :completed AND #status <> :failed",
-        ExpressionAttributeNames: {
-          "#status": "status"
-        },
-        ExpressionAttributeValues: {
-          ":status": "COMPLETED",
-          ":completed": "COMPLETED",
-          ":failed": "FAILED",
-          ":wordCount": wordCount,
-          ":failureReason": null,
-          ":updatedAt": updatedAt
-        }
-      })
-    );
-    return true;
-  } catch (error) {
-    if (error instanceof ConditionalCheckFailedException) {
-      return false;
-    }
-    throw error;
-  }
-}
-
-export async function markJobFailed(customerId: string, jobId: string, failureReason: string): Promise<boolean> {
-  const updatedAt = nowIso();
-  try {
-    await client.send(
-      new UpdateCommand({
-        TableName: tableName,
-        Key: {
-          PK: customerPk(customerId),
-          SK: jobSk(jobId)
-        },
-        UpdateExpression: "SET #status = :status, failureReason = :failureReason, updatedAt = :updatedAt",
-        ConditionExpression: "attribute_exists(PK) AND #status <> :completed AND #status <> :failed",
-        ExpressionAttributeNames: {
-          "#status": "status"
-        },
-        ExpressionAttributeValues: {
-          ":status": "FAILED",
-          ":completed": "COMPLETED",
-          ":failed": "FAILED",
-          ":failureReason": failureReason,
-          ":updatedAt": updatedAt
-        }
-      })
-    );
-    return true;
-  } catch (error) {
-    if (error instanceof ConditionalCheckFailedException) {
-      return false;
-    }
-    throw error;
-  }
 }
 
 export async function putWebhook(record: WebhookRecord): Promise<void> {
@@ -656,98 +578,4 @@ export async function getEnrichmentRecord(customerId: string, jobId: string): Pr
   );
 
   return (result.Item as EnrichmentRecord | undefined) ?? null;
-}
-
-export async function reserveUsageCapacity(
-  customerId: string,
-  usageMonth: string,
-  reservedSeconds: number,
-  limits: LimitConfig
-): Promise<void> {
-  const monthlyLimitSeconds = limits.monthlyTranscriptionMinutes * 60;
-  if (reservedSeconds > monthlyLimitSeconds) {
-    throw quotaExceeded("Requested audio duration exceeds the monthly transcription limit");
-  }
-
-  const remainingAllowedSeconds = monthlyLimitSeconds - reservedSeconds;
-  const now = nowIso();
-
-  try {
-    await client.send(
-      new UpdateCommand({
-        TableName: tableName,
-        Key: {
-          PK: customerPk(customerId),
-          SK: `USAGE#${usageMonth}`
-        },
-        UpdateExpression:
-          "SET recordType = :recordType, customerId = :customerId, usageMonth = :usageMonth, createdAt = if_not_exists(createdAt, :now), updatedAt = :now ADD activeJobs :one, submittedJobs :one, reservedSeconds :reservedSeconds",
-        ConditionExpression:
-          "(attribute_not_exists(activeJobs) OR activeJobs < :maxActiveJobs) AND (attribute_not_exists(reservedSeconds) OR reservedSeconds <= :remainingAllowedSeconds)",
-        ExpressionAttributeValues: {
-          ":recordType": "USAGE",
-          ":customerId": customerId,
-          ":usageMonth": usageMonth,
-          ":now": now,
-          ":one": 1,
-          ":reservedSeconds": reservedSeconds,
-          ":maxActiveJobs": limits.maxActiveJobs,
-          ":remainingAllowedSeconds": remainingAllowedSeconds
-        }
-      })
-    );
-  } catch (error) {
-    if (error instanceof ConditionalCheckFailedException) {
-      throw quotaExceeded("Usage limit exceeded for active jobs or monthly transcription minutes");
-    }
-    throw error;
-  }
-}
-
-export async function releaseUsageReservation(customerId: string, usageMonth: string, reservedSeconds: number): Promise<void> {
-  await updateUsageCounter(customerId, usageMonth, -1, -reservedSeconds, "failedStarts");
-}
-
-export async function closeActiveUsage(customerId: string, usageMonth: string, completed: boolean): Promise<void> {
-  await updateUsageCounter(customerId, usageMonth, -1, 0, completed ? "completedJobs" : "failedJobs");
-}
-
-async function updateUsageCounter(
-  customerId: string,
-  usageMonth: string,
-  activeJobsDelta: number,
-  reservedSecondsDelta: number,
-  terminalCounter: "completedJobs" | "failedJobs" | "failedStarts"
-): Promise<void> {
-  const expressionValues: Record<string, string | number> = {
-    ":now": nowIso(),
-    ":activeDelta": activeJobsDelta,
-    ":terminalDelta": 1,
-    ":zero": 0
-  };
-
-  let updateExpression = `SET updatedAt = :now ADD activeJobs :activeDelta, ${terminalCounter} :terminalDelta`;
-  if (reservedSecondsDelta !== 0) {
-    updateExpression += ", reservedSeconds :reservedSecondsDelta";
-    expressionValues[":reservedSecondsDelta"] = reservedSecondsDelta;
-  }
-
-  try {
-    await client.send(
-      new UpdateCommand({
-        TableName: tableName,
-        Key: {
-          PK: customerPk(customerId),
-          SK: `USAGE#${usageMonth}`
-        },
-        UpdateExpression: updateExpression,
-        ConditionExpression: "attribute_exists(PK) AND activeJobs > :zero",
-        ExpressionAttributeValues: expressionValues
-      })
-    );
-  } catch (error) {
-    if (!(error instanceof ConditionalCheckFailedException)) {
-      throw error;
-    }
-  }
 }

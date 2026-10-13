@@ -25,7 +25,13 @@ const handlers = [
   "delete-transcription",
   "completion",
   "deliver-webhook",
-  "enrich-transcript"
+  "enrich-transcript",
+  "download-transcript",
+  "manage-api-keys",
+  "purge-transcription",
+  "webhook-deliveries",
+  "dispatch-outbox",
+  "reconcile-jobs"
 ];
 
 rmSync(distDir, { recursive: true, force: true });
@@ -43,7 +49,7 @@ async function zipHandler(name) {
   });
 
   archive.pipe(output);
-  archive.file(join(handlerDir, `${name}.js`), { name: "index.js" });
+  archive.file(join(handlerDir, `${name}.js`), { name: "index.js", date: new Date("2000-01-01T00:00:00Z") });
   await archive.finalize();
   await done;
 }
@@ -54,7 +60,7 @@ for (const handler of handlers) {
     outfile: join(handlerDir, `${handler}.js`),
     bundle: true,
     platform: "node",
-    target: "node20",
+    target: "node24",
     format: "cjs",
     sourcemap: true,
     minify: false,
